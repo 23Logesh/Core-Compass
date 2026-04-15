@@ -1,0 +1,229 @@
+version: "3.9"
+
+# ===================================================================
+# CoreCompass — Full Production Stack (8 microservices)
+# Zero-cost: Oracle Cloud Free Tier + Supabase + Vercel
+# Run: docker compose up --build
+# ===================================================================
+
+services:
+
+  # ─── 1. Eureka Registry :8761 ──────────────────────────────────
+  eureka-server:
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
+    container_name: corecompass-eureka
+    ports: ["8761:8761"]
+    environment:
+      - EUREKA_PORT=8761
+      - EUREKA_HOSTNAME=eureka-server
+      - EUREKA_USERNAME=${EUREKA_USERNAME:-admin}
+      - EUREKA_PASSWORD=${EUREKA_PASSWORD:-corecompass2026}
+      - JAVA_OPTS=-Xmx200m -Xms100m
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 2. API Gateway :8080 ──────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: corecompass-gateway
+    ports: ["8080:8080"]
+    environment:
+      - GATEWAY_PORT=8080
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET:-CoreCompassSuperSecretKeyForJWTTokenGenerationMinimum256BitsLong}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 3. Auth Service :8081 ─────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: corecompass-auth
+#    ports: ["8081:8081"]
+    environment:
+      - AUTH_PORT=8081
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET:-CoreCompassSuperSecretKeyForJWTTokenGenerationMinimum256BitsLong}
+      - JWT_ACCESS_EXPIRY=900
+      - JWT_REFRESH_EXPIRY=604800
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 50s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 4. Core Service :8082 ─────────────────────────────────────
+  core-service:
+    build:
+      context: ./core-service
+      dockerfile: Dockerfile
+    container_name: corecompass-core
+#    ports: ["8082:8082"]
+    environment:
+      - CORE_PORT=8082
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - GOOGLE_CALENDAR_ENABLED=${GOOGLE_CALENDAR_ENABLED:-false}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 5. Fitness Service :8083 ──────────────────────────────────
+  fitness-service:
+    build:
+      context: ./fitness-service
+      dockerfile: Dockerfile
+    container_name: corecompass-fitness
+#    ports: ["8083:8083"]
+    environment:
+      - FITNESS_PORT=8083
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 6. Finance Service :8084 ──────────────────────────────────
+  finance-service:
+    build:
+      context: ./finance-service
+      dockerfile: Dockerfile
+    container_name: corecompass-finance
+#    ports: ["8084:8084"]
+    environment:
+      - FINANCE_PORT=8084
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8084/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 7. Habits Service :8085 ───────────────────────────────────
+  habits-service:
+    build:
+      context: ./habits-service
+      dockerfile: Dockerfile
+    container_name: corecompass-habits
+#    ports: ["8085:8085"]
+    environment:
+      - HABITS_PORT=8085
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+  # ─── 8. Report Service :8086 ───────────────────────────────────
+  report-service:
+    build:
+      context: ./report-service
+      dockerfile: Dockerfile
+    container_name: corecompass-report
+#    ports: ["8086:8086"]
+    environment:
+      - REPORT_PORT=8086
+      - EUREKA_URL=http://${EUREKA_USERNAME:-admin}:${EUREKA_PASSWORD:-corecompass2026}@eureka-server:8761/eureka/
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JAVA_OPTS=-Xmx256m -Xms128m
+    depends_on:
+      core-service:
+        condition: service_healthy
+      fitness-service:
+        condition: service_healthy
+      finance-service:
+        condition: service_healthy
+      habits-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8086/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 70s
+    networks: [corecompass-net]
+    restart: unless-stopped
+
+networks:
+  corecompass-net:
+    driver: bridge
+    name: corecompass-network

@@ -1,0 +1,140 @@
+package com.corecompass.auth.controller;
+
+import com.corecompass.auth.dto.*;
+import com.corecompass.auth.service.AuthService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Arrays;
+import java.util.UUID;
+
+/**
+ * Auth Controller — handles all authentication endpoints.
+ *
+ * All routes are public at the web layer (gateway passes them through).
+ * Protected routes (/me, /logout) receive X-User-Id from the gateway JWT filter.
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
+public class AuthController {
+
+    private final AuthService authService;
+
+    // ── POST /api/v1/auth/register ─────────────────────────────────────────
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<AuthResponse>> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletResponse response) {
+
+        AuthResponse auth = authService.register(request, response);
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.ok(auth, "Registration successful. Welcome to CoreCompass!"));
+    }
+
+    // ── POST /api/v1/auth/login ────────────────────────────────────────────
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<AuthResponse>> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletResponse response) {
+
+        AuthResponse auth = authService.login(request, response);
+        return ResponseEntity.ok(ApiResponse.ok(auth, "Login successful"));
+    }
+
+    // ── POST /api/v1/auth/refresh ──────────────────────────────────────────
+    // Refresh token comes as HttpOnly cookie (auto-sent by browser).
+    // Also accepts it in the request body for mobile clients.
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+
+        // 1. Try HttpOnly cookie first
+        String rawToken = extractRefreshTokenFromCookie(request);
+
+        // 2. Fallback: request body (for mobile)
+        if (rawToken == null) {
+            try {
+                var body = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(request.getInputStream());
+                if (body.has("refreshToken")) {
+                    rawToken = body.get("refreshToken").asText();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        AuthResponse auth = authService.refresh(rawToken, response);
+        return ResponseEntity.ok(ApiResponse.ok(auth, "Token refreshed successfully"));
+    }
+
+    // ── POST /api/v1/auth/logout ───────────────────────────────────────────
+    // Protected — X-User-Id injected by gateway JWT filter
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestHeader("X-User-Id") UUID userId,
+            HttpServletResponse response) {
+
+        authService.logout(userId, response);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Logged out successfully"));
+    }
+
+    // ── GET /api/v1/auth/me ────────────────────────────────────────────────
+    // Protected — X-User-Id injected by gateway JWT filter
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserDTO>> getProfile(
+            @RequestHeader("X-User-Id") UUID userId) {
+
+        UserDTO user = authService.getProfile(userId);
+        return ResponseEntity.ok(ApiResponse.ok(user, null));
+    }
+
+    // ── PUT /api/v1/auth/me ────────────────────────────────────────────────
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<UserDTO>> updateProfile(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody UpdateProfileRequest request) {
+
+        UserDTO user = authService.updateProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.ok(user, "Profile updated successfully"));
+    }
+
+    // ── DELETE /api/v1/auth/me ─────────────────────────────────────────────
+    // Soft-deletes account (GDPR compliance)
+    @DeleteMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> deleteAccount(
+            @RequestHeader("X-User-Id") UUID userId,
+            HttpServletResponse response) {
+
+        authService.deleteAccount(userId, response);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Account deleted successfully"));
+    }
+
+    // ── GET /api/v1/auth/health ────────────────────────────────────────────
+    @GetMapping("/health")
+    public ResponseEntity<ApiResponse<String>> health() {
+        return ResponseEntity.ok(ApiResponse.ok("auth-service:UP", null));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // HELPER
+    // ─────────────────────────────────────────────────────────────────────
+
+    private String extractRefreshTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) return null;
+        return Arrays.stream(request.getCookies())
+            .filter(c -> "refreshToken".equals(c.getName()))
+            .map(Cookie::getValue)
+            .findFirst()
+            .orElse(null);
+    }
+}

@@ -1,0 +1,43 @@
+server:
+  port: ${EUREKA_PORT:8761}
+
+spring:
+  application:
+    name: eureka-server
+  security:
+    user:
+      # Overridden by EurekaSecurityConfig — these are fallbacks
+      name: ${EUREKA_USERNAME:admin}
+      password: ${EUREKA_PASSWORD:corecompass2026}
+
+eureka:
+  dashboard:
+    username: ${EUREKA_USERNAME:admin}
+    password: ${EUREKA_PASSWORD:corecompass2026}
+  instance:
+    hostname: ${EUREKA_HOSTNAME:localhost}
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.dashboard.username}:${eureka.dashboard.password}@${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    enable-self-preservation: true       # Dev: off. Prod: set to true
+    eviction-interval-timer-in-ms: 5000
+    renewal-percent-threshold: 0.85
+    wait-time-in-ms-when-sync-empty: 0    # Faster startup
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+    root: INFO

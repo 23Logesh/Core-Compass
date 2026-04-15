@@ -1,0 +1,86 @@
+server:
+  port: ${CORE_PORT:8082}
+
+spring:
+  application:
+    name: core-service
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: CoreHikariPool
+      maximum-pool-size: 5
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: core_schema
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: core_schema
+    baseline-on-migrate: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://${EUREKA_USERNAME:admin}:${EUREKA_PASSWORD:corecompass2026}@${EUREKA_HOST:localhost}:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+
+# Feign client config — per LLD Section 5.6
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 2000   # 2s — fast-fail
+        read-timeout: 5000      # 5s — allow DB queries
+  circuitbreaker:
+    enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      fitness-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      finance-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      habits-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+google:
+  calendar:
+    enabled: ${GOOGLE_CALENDAR_ENABLED:false}
+    timezone: ${GOOGLE_CALENDAR_TIMEZONE:Asia/Kolkata}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.corecompass.core: DEBUG
+    org.springframework.data.jpa: WARN
+    root: INFO

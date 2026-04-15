@@ -1,0 +1,242 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # ─────────────────────────────────────────
+      # Global CORS — allows React PWA on Vercel
+      # ─────────────────────────────────────────
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "https://corecompass.app"
+              - "https://*.vercel.app"
+              - "http://localhost:5173"
+              - "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - X-User-Id
+              - Accept
+              - Origin
+            exposedHeaders:
+              - X-Request-Id
+              - X-Response-Time
+            allowCredentials: true
+            maxAge: 3600
+
+      # ─────────────────────────────────────────
+      # Routes — lb:// uses Eureka load balancing
+      # ─────────────────────────────────────────
+      routes:
+
+        # ── AUTH SERVICE ──────────────────────────────────────
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: auth-cb
+                fallbackUri: forward:/fallback/auth
+#            - name: RequestRateLimiter
+#              args:
+#                # 10 req/min per IP — brute-force protection
+#                redis-rate-limiter.replenishRate: 10
+#                redis-rate-limiter.burstCapacity: 20
+#                key-resolver: "#{@ipKeyResolver}"
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+            - AddResponseHeader=X-Content-Type-Options, nosniff
+            - AddResponseHeader=X-Frame-Options, DENY
+
+        # ── CORE SERVICE (Goals, Todos, Dashboard, Users) ─────
+        - id: core-service
+          uri: lb://core-service
+          predicates:
+            - Path=/api/v1/goals/**,/api/v1/todos/**,/api/v1/users/**,/api/v1/dashboard/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: core-cb
+                fallbackUri: forward:/fallback/core
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+            - AddResponseHeader=X-Content-Type-Options, nosniff
+
+        # ── FITNESS SERVICE ───────────────────────────────────
+        - id: fitness-service
+          uri: lb://fitness-service
+          predicates:
+            - Path=/api/v1/fitness/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: fitness-cb
+                fallbackUri: forward:/fallback/fitness
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+
+        # ── FINANCE SERVICE ───────────────────────────────────
+        - id: finance-service
+          uri: lb://finance-service
+          predicates:
+            - Path=/api/v1/finance/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: finance-cb
+                fallbackUri: forward:/fallback/finance
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+
+        # ── HABITS SERVICE ────────────────────────────────────────
+        - id: habits-service
+          uri: lb://habits-service
+          predicates:
+            - Path=/api/v1/habits/**,/api/v1/habit-stacks/**,/api/v1/routines/**   # ← add /api/v1/routines/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: habits-cb
+                fallbackUri: forward:/fallback/habits
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+
+        # ── REPORT SERVICE ────────────────────────────────────
+        - id: report-service
+          uri: lb://report-service
+          predicates:
+            - Path=/api/v1/reports/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: report-cb
+                fallbackUri: forward:/fallback/report
+#            - name: RequestRateLimiter
+#              args:
+#                # Report generation is expensive — limit to 10/min per user
+#                redis-rate-limiter.replenishRate: 10
+#                redis-rate-limiter.burstCapacity: 10
+#                key-resolver: "#{@userKeyResolver}"
+            - AddRequestHeader=X-Gateway-Source, corecompass-gateway
+
+      # Default filters applied to every route
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - name: Retry
+          args:
+            retries: 3
+            statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+            methods: GET
+            backoff:
+              firstBackoff: 500ms
+              maxBackoff: 2000ms
+              factor: 2
+
+# ─────────────────────────────────────────────────────────────
+# Eureka — Service Discovery
+# ─────────────────────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://${EUREKA_USERNAME:admin}:${EUREKA_PASSWORD:corecompass2026}@${EUREKA_HOST:localhost}:8761/eureka/}
+    registry-fetch-interval-seconds: 10
+    instance-info-replication-interval-seconds: 10
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    metadata-map:
+      zone: primary
+
+# ─────────────────────────────────────────────────────────────
+# JWT
+# ─────────────────────────────────────────────────────────────
+jwt:
+  secret: ${JWT_SECRET:CoreCompassSuperSecretKeyForJWTTokenGenerationMinimum256BitsLong}
+
+# ─────────────────────────────────────────────────────────────
+# Resilience4j — Circuit Breaker instances
+# ─────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      auth-cb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 3
+      core-cb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+      fitness-cb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      finance-cb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      habits-cb:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      report-cb:
+        sliding-window-size: 5
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 30s
+  timelimiter:
+    instances:
+      auth-cb:
+        timeout-duration: 5s
+      core-cb:
+        timeout-duration: 5s
+      fitness-cb:
+        timeout-duration: 5s
+      finance-cb:
+        timeout-duration: 5s
+      habits-cb:
+        timeout-duration: 5s
+      report-cb:
+        timeout-duration: 10s  # Report generation can be slower
+
+# ─────────────────────────────────────────────────────────────
+# Actuator — Health & Metrics
+# ─────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus,circuitbreakers
+  endpoint:
+    health:
+      show-details: when-authorized
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# ─────────────────────────────────────────────────────────────
+# Logging
+# ─────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.corecompass.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    io.github.resilience4j: INFO
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

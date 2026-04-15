@@ -1,0 +1,61 @@
+server:
+  port: ${REPORT_PORT:8086}
+
+spring:
+  application:
+    name: report-service
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: report_schema
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: report_schema
+    baseline-on-migrate: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://${EUREKA_USERNAME:admin}:${EUREKA_PASSWORD:corecompass2026}@${EUREKA_HOST:localhost}:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+# Feign clients config
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 3000
+        read-timeout: 5000
+  circuitbreaker:
+    enabled: true
+
+# Scheduling — enabled in production, can be disabled in tests
+scheduling:
+  enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    com.corecompass.report: DEBUG
+    org.springframework.scheduling: INFO
