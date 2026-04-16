@@ -125,6 +125,36 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("auth-service:UP", null));
     }
 
+    // ── POST /api/v1/auth/forgot-password ─────────────────────────────────
+// Public — always returns 200 (don't reveal if email exists)
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody com.corecompass.auth.dto.PasswordResetDtos.ForgotPasswordRequest request) {
+
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.ok(null,
+                "If an account exists for this email, an OTP has been sent"));
+    }
+
+    // ── POST /api/v1/auth/verify-otp ──────────────────────────────────────
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<com.corecompass.auth.dto.PasswordResetDtos.VerifyOtpResponse>> verifyOtp(
+            @Valid @RequestBody com.corecompass.auth.dto.PasswordResetDtos.VerifyOtpRequest request) {
+
+        var result = authService.verifyOtp(request);
+        return ResponseEntity.ok(ApiResponse.ok(result, result.getMessage()));
+    }
+
+    // ── POST /api/v1/auth/reset-password ──────────────────────────────────
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody com.corecompass.auth.dto.PasswordResetDtos.ResetPasswordRequest request) {
+
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.ok(null,
+                "Password updated successfully. Please log in with your new password"));
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // HELPER
     // ─────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import com.corecompass.auth.dto.*;
 import com.corecompass.auth.entity.RefreshTokenEntity;
 import com.corecompass.auth.entity.UserEntity;
 import com.corecompass.auth.exception.*;
+import com.corecompass.auth.repository.PasswordResetTokenRepository;
 import com.corecompass.auth.repository.RefreshTokenRepository;
 import com.corecompass.auth.repository.UserRepository;
 import com.corecompass.auth.security.JwtService;
@@ -17,8 +18,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.Instant;
+
 import java.time.Instant;
 import java.util.UUID;
+
+import com.corecompass.auth.dto.PasswordResetDtos.*;
+import com.corecompass.auth.entity.PasswordResetTokenEntity;
+import com.corecompass.auth.repository.PasswordResetTokenRepository;
+import org.springframework.mail.javamail.JavaMailSender;
 
 @Slf4j
 @Service
@@ -29,6 +38,8 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService            jwtService;
     private final PasswordEncoder       passwordEncoder;
+    private final PasswordResetTokenRepository resetTokenRepository;
+    private final EmailService emailService;
 
     @Value("${jwt.refresh-token-expiry-seconds:604800}")   // 7 days
     private long refreshTokenExpirySeconds;
@@ -219,7 +230,117 @@ public class AuthService {
     public void cleanupExpiredTokens() {
         Instant cutoff = Instant.now();
         refreshTokenRepository.deleteExpiredAndRevoked(cutoff);
-        log.info("Cleanup: expired/revoked refresh tokens deleted");
+        resetTokenRepository.deleteExpiredOrUsed(cutoff);
+        log.info("Cleanup: expired/revoked refresh tokens + password reset tokens deleted");
+    }
+
+    // ──────────────────────────────────────────────────────────
+// FORGOT PASSWORD — Step 1: send OTP
+// ──────────────────────────────────────────────────────────
+
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        String email = request.getEmail().toLowerCase().trim();
+
+        // Always respond the same — don't reveal if email exists (security)
+        userRepository.findByEmailAndIsDeletedFalse(email).ifPresent(user -> {
+            // Invalidate any existing pending tokens for this email
+            resetTokenRepository
+                    .findTopByEmailAndUsedFalseAndExpiresAtAfterOrderByCreatedAtDesc(email, Instant.now())
+                    .ifPresent(existing -> {
+                        existing.setUsed(true);
+                        resetTokenRepository.save(existing);
+                    });
+
+            // Generate 6-digit OTP
+            String otp     = String.format("%06d", new SecureRandom().nextInt(1_000_000));
+            String otpHash = hashWithSha256(otp);
+
+            PasswordResetTokenEntity token = PasswordResetTokenEntity.builder()
+                    .email(email)
+                    .otpHash(otpHash)
+                    .expiresAt(Instant.now().plusSeconds(900)) // 15 minutes
+                    .build();
+
+            resetTokenRepository.save(token);
+
+            // Send OTP email (async — won't block response)
+            emailService.sendOtpEmail(email, user.getName(), otp);
+            log.info("Password reset OTP sent to: {}", email);
+        });
+    }
+
+// ──────────────────────────────────────────────────────────
+// VERIFY OTP — Step 2: validate OTP, return reset token
+// ──────────────────────────────────────────────────────────
+
+    @Transactional
+    public VerifyOtpResponse verifyOtp(VerifyOtpRequest request) {
+        String email = request.getEmail().toLowerCase().trim();
+
+        PasswordResetTokenEntity token = resetTokenRepository
+                .findTopByEmailAndUsedFalseAndExpiresAtAfterOrderByCreatedAtDesc(email, Instant.now())
+                .orElseThrow(() -> new InvalidTokenException("OTP is invalid or has expired"));
+
+        if (token.getAttempts() >= 3) {
+            token.setUsed(true);
+            resetTokenRepository.save(token);
+            throw new InvalidTokenException("Too many failed attempts. Please request a new OTP");
+        }
+
+        if (!token.getOtpHash().equals(hashWithSha256(request.getOtp()))) {
+            token.setAttempts(token.getAttempts() + 1);
+            resetTokenRepository.save(token);
+            int remaining = 3 - token.getAttempts();
+            throw new InvalidTokenException("Incorrect OTP. " + remaining + " attempt(s) remaining");
+        }
+
+        // OTP correct — generate a short-lived reset token
+        String rawResetToken  = UUID.randomUUID().toString();
+        String resetTokenHash = hashWithSha256(rawResetToken);
+
+        token.setVerified(true);
+        token.setResetTokenHash(resetTokenHash);
+        // Reset token expires in 10 minutes from now
+        token.setExpiresAt(Instant.now().plusSeconds(600));
+        resetTokenRepository.save(token);
+
+        log.info("OTP verified for: {}", email);
+        return new VerifyOtpResponse(rawResetToken, "OTP verified. Use resetToken to set your new password");
+    }
+
+// ──────────────────────────────────────────────────────────
+// RESET PASSWORD — Step 3: set new password
+// ──────────────────────────────────────────────────────────
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        String tokenHash = hashWithSha256(request.getResetToken());
+
+        PasswordResetTokenEntity token = resetTokenRepository
+                .findByResetTokenHashAndVerifiedTrueAndUsedFalseAndExpiresAtAfter(tokenHash, Instant.now())
+                .orElseThrow(() -> new InvalidTokenException("Reset token is invalid or has expired"));
+
+        UserEntity user = userRepository
+                .findByEmailAndIsDeletedFalse(token.getEmail())
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (!user.isActive()) {
+            throw new AccountDisabledException("This account has been disabled");
+        }
+
+        // Update password
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Mark token used
+        token.setUsed(true);
+        resetTokenRepository.save(token);
+
+        // Revoke ALL refresh tokens — force re-login on all devices
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+
+        log.info("Password reset successful for: {}", token.getEmail());
     }
 
     // ──────────────────────────────────────────────────────────
