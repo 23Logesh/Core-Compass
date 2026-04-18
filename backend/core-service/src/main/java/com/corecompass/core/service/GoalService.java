@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.corecompass.core.exception.AccessDeniedException;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,8 @@ public class GoalService {
     private final TodoRepository      todoRepository;
     private final MilestoneRepository milestoneRepository;
     private final GoogleCalendarService calendarService;
+    private final ActivityRepository     activityRepository;
+    private final ActivityTypeRepository activityTypeRepository;
 
     // ─────────────────────────────────────────────────────────
     // GOAL TYPES (Type Registry)
@@ -424,5 +428,121 @@ public class GoalService {
             .isSystem(gt.isSystem())
             .isPublic(gt.isPublic())
             .build();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+// ACTIVITY TYPES (Type Registry)
+// ─────────────────────────────────────────────────────────────
+
+    public List<ActivityTypeDTO> listActivityTypes(UUID userId) {
+        return activityTypeRepository.findAvailableForUser(userId)
+                .stream().map(this::toActivityTypeDTO).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ActivityTypeDTO createActivityType(UUID userId, ActivityTypeRequest request) {
+        if (activityTypeRepository.existsByNameAndCreatedBy(request.getName(), userId)) {
+            throw new DuplicateResourceException("DUPLICATE_TYPE",
+                    "You already have an activity type named '" + request.getName() + "'");
+        }
+        ActivityTypeEntity entity = ActivityTypeEntity.builder()
+                .name(request.getName().trim())
+                .icon(request.getIcon())
+                .color(request.getColor())
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        return toActivityTypeDTO(activityTypeRepository.save(entity));
+    }
+
+    @Transactional
+    public ActivityTypeDTO updateActivityType(UUID userId, UUID typeId, ActivityTypeRequest request) {
+        ActivityTypeEntity entity = activityTypeRepository.findByIdAndCreatedBy(typeId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Activity type not found or not editable"));
+        if (request.getName() != null) entity.setName(request.getName().trim());
+        if (request.getIcon()  != null) entity.setIcon(request.getIcon());
+        if (request.getColor() != null) entity.setColor(request.getColor());
+        return toActivityTypeDTO(activityTypeRepository.save(entity));
+    }
+
+    @Transactional
+    public void deleteActivityType(UUID userId, UUID typeId) {
+        ActivityTypeEntity entity = activityTypeRepository.findByIdAndCreatedBy(typeId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Activity type not found or not editable"));
+        activityTypeRepository.delete(entity);
+    }
+
+// ─────────────────────────────────────────────────────────────
+// ACTIVITIES
+// ─────────────────────────────────────────────────────────────
+
+    public PageResponse<ActivityResponse> listActivities(UUID userId, UUID goalId, Pageable pageable) {
+        // Verify goal belongs to this user
+        goalRepository.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Goal not found"));
+        return PageResponse.of(
+                activityRepository.findByGoalIdAndUserId(goalId, userId, pageable)
+                        .map(this::toActivityResponse));
+    }
+
+    @Transactional
+    public ActivityResponse logActivity(UUID userId, UUID goalId, ActivityRequest request) {
+        goalRepository.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Goal not found"));
+
+        ActivityTypeEntity type = activityTypeRepository.findById(request.getActivityTypeId())
+                .orElseThrow(() -> new InvalidRequestException("NOT_FOUND","Activity type not found"));
+
+        ActivityEntity entity = ActivityEntity.builder()
+                .userId(userId)
+                .goalId(goalId)
+                .activityTypeId(type.getId())
+                .note(request.getNote())
+                .value(request.getValue())
+                .unit(request.getUnit())
+                .build();
+        return toActivityResponse(activityRepository.save(entity));
+    }
+
+    @Transactional
+    public void deleteActivity(UUID userId, UUID goalId, UUID activityId) {
+        ActivityEntity entity = activityRepository.findByIdAndUserId(activityId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Activity not found"));
+        // Ensure it belongs to the requested goal too
+        if (!entity.getGoalId().equals(goalId)) {
+            throw new AccessDeniedException("Activity does not belong to this goal");
+        }
+        entity.setDeleted(true);
+        activityRepository.save(entity);
+    }
+
+// ─────────────────────────────────────────────────────────────
+// ACTIVITY MAPPERS (private)
+// ─────────────────────────────────────────────────────────────
+
+    private ActivityResponse toActivityResponse(ActivityEntity e) {
+        // Fetch type name+icon for the response (type will be in 1st-level cache after initial load)
+        ActivityTypeEntity type = activityTypeRepository.findById(e.getActivityTypeId()).orElse(null);
+        return ActivityResponse.builder()
+                .id(e.getId())
+                .goalId(e.getGoalId())
+                .activityTypeName(type != null ? type.getName() : null)
+                .activityTypeIcon(type != null ? type.getIcon() : null)
+                .note(e.getNote())
+                .value(e.getValue())
+                .unit(e.getUnit())
+                .loggedAt(e.getLoggedAt())
+                .build();
+    }
+
+    private ActivityTypeDTO toActivityTypeDTO(ActivityTypeEntity e) {
+        return ActivityTypeDTO.builder()
+                .id(e.getId())
+                .name(e.getName())
+                .icon(e.getIcon())
+                .color(e.getColor())
+                .isSystem(e.isSystem())
+                .createdAt(e.getCreatedAt())
+                .build();
     }
 }

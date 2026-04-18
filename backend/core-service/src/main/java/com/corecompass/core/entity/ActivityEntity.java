@@ -18,7 +18,7 @@ import java.util.UUID;
            @Index(name = "idx_activities_user_id", columnList = "user_id")
        })
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-class ActivityEntity {
+public class ActivityEntity {
 
     @Id @UuidGenerator @Column(updatable = false, nullable = false)
     private UUID id;

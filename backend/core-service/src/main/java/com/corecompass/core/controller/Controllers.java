@@ -261,5 +261,92 @@ class InternalCoreController {
             @RequestParam UUID userId) {
         return ResponseEntity.ok(goalService.getGoalProgressSummary(userId));
     }
+
 }
+
+    // ═══════════════════════════════════════════════════════════════
+// ACTIVITY TYPE CONTROLLER — /api/v1/activity-types
+// ═══════════════════════════════════════════════════════════════
+    @RestController
+    @RequestMapping("/api/v1/activity-types")
+    @RequiredArgsConstructor
+    class ActivityTypeController {
+
+        private final GoalService goalService;
+
+        @GetMapping
+        public ResponseEntity<ApiResponse<List<ActivityTypeDTO>>> listTypes(
+                @RequestHeader("X-User-Id") UUID userId) {
+            return ResponseEntity.ok(ApiResponse.ok(goalService.listActivityTypes(userId), null));
+        }
+
+        @PostMapping
+        public ResponseEntity<ApiResponse<ActivityTypeDTO>> createType(
+                @RequestHeader("X-User-Id") UUID userId,
+                @Valid @RequestBody ActivityTypeRequest request) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.ok(goalService.createActivityType(userId, request),
+                            "Activity type created"));
+        }
+
+        @PutMapping("/{typeId}")
+        public ResponseEntity<ApiResponse<ActivityTypeDTO>> updateType(
+                @RequestHeader("X-User-Id") UUID userId,
+                @PathVariable UUID typeId,
+                @Valid @RequestBody ActivityTypeRequest request) {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    goalService.updateActivityType(userId, typeId, request), "Updated"));
+        }
+
+        @DeleteMapping("/{typeId}")
+        public ResponseEntity<ApiResponse<Void>> deleteType(
+                @RequestHeader("X-User-Id") UUID userId,
+                @PathVariable UUID typeId) {
+            goalService.deleteActivityType(userId, typeId);
+            return ResponseEntity.ok(ApiResponse.ok(null, "Activity type deleted"));
+        }
+    }
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVITY CONTROLLER — /api/v1/goals/{goalId}/activities
+// ═══════════════════════════════════════════════════════════════
+    @RestController
+    @RequestMapping("/api/v1/goals/{goalId}/activities")
+    @RequiredArgsConstructor
+    class ActivityController {
+
+        private final GoalService goalService;
+
+        @GetMapping
+        public ResponseEntity<ApiResponse<PageResponse<ActivityResponse>>> listActivities(
+                @RequestHeader("X-User-Id") UUID userId,
+                @PathVariable UUID goalId,
+                @RequestParam(defaultValue = "0")  int page,
+                @RequestParam(defaultValue = "20") int size) {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    goalService.listActivities(userId, goalId,
+                            PageRequest.of(page, size, Sort.by("loggedAt").descending())), null));
+        }
+
+        @PostMapping
+        public ResponseEntity<ApiResponse<ActivityResponse>> logActivity(
+                @RequestHeader("X-User-Id") UUID userId,
+                @PathVariable UUID goalId,
+                @Valid @RequestBody ActivityRequest request) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.ok(
+                            goalService.logActivity(userId, goalId, request),
+                            "Activity logged"));
+        }
+
+        @DeleteMapping("/{activityId}")
+        public ResponseEntity<ApiResponse<Void>> deleteActivity(
+                @RequestHeader("X-User-Id") UUID userId,
+                @PathVariable UUID goalId,
+                @PathVariable UUID activityId) {
+            goalService.deleteActivity(userId, goalId, activityId);
+            return ResponseEntity.ok(ApiResponse.ok(null, "Activity deleted"));
+        }
+    }
+
 
