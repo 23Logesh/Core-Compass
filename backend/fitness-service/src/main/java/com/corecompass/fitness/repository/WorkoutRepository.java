@@ -23,4 +23,15 @@ public interface WorkoutRepository extends JpaRepository<WorkoutSessionEntity, U
     @Query("SELECT DISTINCT w.sessionDate FROM WorkoutSessionEntity w " +
             "WHERE w.userId=:u AND w.isDeleted=false ORDER BY w.sessionDate DESC")
     List<LocalDate> findDistinctWorkoutDates(@Param("u") UUID u);
+
+    // ADD after existing methods:
+
+    @Query("SELECT COUNT(w) FROM WorkoutSessionEntity w " +
+            "WHERE w.userId=:u AND YEAR(w.sessionDate)=:yr AND MONTH(w.sessionDate)=:mo AND w.isDeleted=false")
+    long countForMonth(@Param("u") UUID u, @Param("yr") int yr, @Param("mo") int mo);
+
+    @Query("SELECT COALESCE(SUM(w.totalVolumeKg),0) FROM WorkoutSessionEntity w " +
+            "WHERE w.userId=:u AND YEAR(w.sessionDate)=:yr AND MONTH(w.sessionDate)=:mo AND w.isDeleted=false")
+    java.math.BigDecimal sumVolumeForMonth(@Param("u") UUID u, @Param("yr") int yr, @Param("mo") int mo);
+
 }

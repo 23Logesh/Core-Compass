@@ -15,6 +15,10 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class FitnessService {
     private final MoodLogRepository    moodRepo;
     private final HydrationRepository  hydrationRepo;
     private final WorkoutExerciseRepository workoutExerciseRepo;
+    private final FitnessTargetRepository targetRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -78,40 +83,8 @@ public class FitnessService {
                 .notes(req.getNotes())
                 .build();
         session = workoutRepo.save(session);
-
-        // ADD this replacement block:
-        List<ExerciseSetResponse> sets = new ArrayList<>();
-        if (req.getExerciseSets() != null && !req.getExerciseSets().isEmpty()) {
-            WorkoutSessionEntity finalSession = session;
-            List<WorkoutExerciseEntity> exerciseEntities = req.getExerciseSets().stream()
-                    .map(s -> WorkoutExerciseEntity.builder()
-                            .sessionId(finalSession.getId())
-                            .exerciseName(s.getExerciseName())
-                            .setNumber(s.getSetNumber())
-                            .reps(s.getReps())
-                            .weightKg(s.getWeightKg())
-                            .durationSeconds(s.getDurationSeconds())
-                            .build())
-                    .collect(Collectors.toList());
-
-            // Actually persist to DB
-            List<WorkoutExerciseEntity> savedSets = workoutExerciseRepo.saveAll(exerciseEntities);
-
-            sets = savedSets.stream().map(ex -> ExerciseSetResponse.builder()
-                    .exerciseName(ex.getExerciseName())
-                    .setNumber(ex.getSetNumber())
-                    .reps(ex.getReps())
-                    .weightKg(ex.getWeightKg())
-                    .build()).collect(Collectors.toList());
-
-            BigDecimal totalVolume = savedSets.stream()
-                    .filter(s -> s.getReps() != null && s.getWeightKg() != null)
-                    .map(s -> s.getWeightKg().multiply(BigDecimal.valueOf(s.getReps())))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            session.setTotalVolumeKg(totalVolume);
-            workoutRepo.save(session);
-        }
-
+        List<ExerciseSetResponse> sets = persistExerciseSets(session.getId(), req.getExerciseSets(), session);
+        workoutRepo.save(session); // save updated totalVolumeKg
         log.info("Workout logged: {} userId={}", session.getWorkoutName(), userId);
         return toWorkoutResponse(session, sets);
     }
@@ -292,6 +265,291 @@ public class FitnessService {
     // Adapter for Feign calls from Report + Core services
     public FitnessSummaryDTO getWeeklySummaryForFeign(UUID userId, String weekStart) {
         return getWeeklySummary(userId, weekStart);
+    }
+
+    // ── PUT /fitness/cardio/{id} ──────────────────────────────────
+    @Transactional
+    public CardioResponse updateCardio(UUID userId, UUID id, CardioUpdateRequest req) {
+        CardioLogEntity e = cardioRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cardio log not found"));
+        if (req.getCardioType()      != null) e.setCardioType(req.getCardioType().toUpperCase());
+        if (req.getDurationMinutes() != null) e.setDurationMinutes(req.getDurationMinutes());
+        if (req.getDistanceKm()      != null) e.setDistanceKm(req.getDistanceKm());
+        if (req.getCaloriesBurned()  != null) e.setCaloriesBurned(req.getCaloriesBurned());
+        if (req.getAvgHeartRate()    != null) e.setAvgHeartRate(req.getAvgHeartRate());
+        if (req.getLoggedDate()      != null) e.setLoggedDate(req.getLoggedDate());
+        if (req.getNotes()           != null) e.setNotes(req.getNotes());
+        return toCardioResponse(cardioRepo.save(e));
+    }
+
+    // ── PUT /fitness/workouts/{id} ────────────────────────────────
+    @Transactional
+    public WorkoutResponse updateWorkout(UUID userId, UUID id, WorkoutUpdateRequest req) {
+        WorkoutSessionEntity session = workoutRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workout not found"));
+        if (req.getWorkoutName()     != null) session.setWorkoutName(req.getWorkoutName());
+        if (req.getSessionDate()     != null) session.setSessionDate(req.getSessionDate());
+        if (req.getDurationMinutes() != null) session.setDurationMinutes(req.getDurationMinutes());
+        if (req.getNotes()           != null) session.setNotes(req.getNotes());
+
+        List<ExerciseSetResponse> sets;
+        if (req.getExerciseSets() != null) {
+            workoutExerciseRepo.deleteBySessionId(id);
+            sets = persistExerciseSets(id, req.getExerciseSets(), session);
+        } else {
+            sets = loadSets(id);
+        }
+        return toWorkoutResponse(workoutRepo.save(session), sets);
+    }
+
+    // ── PUT /fitness/meals/{id} ───────────────────────────────────
+    @Transactional
+    public MealResponse updateMeal(UUID userId, UUID id, MealUpdateRequest req) {
+        MealLogEntity e = mealRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meal log not found"));
+        if (req.getMealType()      != null) e.setMealType(req.getMealType().toUpperCase());
+        if (req.getMealDate()      != null) e.setMealDate(req.getMealDate());
+        if (req.getMealTime()      != null) e.setMealTime(req.getMealTime());
+        if (req.getTotalCalories() != null) e.setTotalCalories(req.getTotalCalories().intValue());
+        if (req.getProteinG()      != null) e.setTotalProteinG(req.getProteinG());
+        if (req.getCarbsG()        != null) e.setTotalCarbsG(req.getCarbsG());
+        if (req.getFatG()          != null) e.setTotalFatG(req.getFatG());
+        if (req.getNotes()         != null) e.setNotes(req.getNotes());
+        return toMealResponse(mealRepo.save(e));
+    }
+
+    // ── PUT /fitness/metrics/{id} ─────────────────────────────────
+    @Transactional
+    public BodyMetricResponse updateMetric(UUID userId, UUID id, BodyMetricUpdateRequest req) {
+        BodyMetricEntity e = metricRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Metric not found"));
+        if (req.getValue()      != null) e.setValue(req.getValue());
+        if (req.getUnit()       != null) e.setUnit(req.getUnit());
+        if (req.getLoggedDate() != null) e.setLoggedDate(req.getLoggedDate());
+        if (req.getNotes()      != null) e.setNotes(req.getNotes());
+        return toMetricResponse(metricRepo.save(e));
+    }
+
+    // ── GET /fitness/sleep ────────────────────────────────────────
+    public PageResponse<SleepResponse> listSleep(UUID userId, Pageable pageable) {
+        return PageResponse.of(
+                sleepRepo.findByUserIdOrderBySleepDateDesc(userId, pageable).map(this::toSleepResponse));
+    }
+
+    // ── PUT /fitness/sleep/{id} ───────────────────────────────────
+    @Transactional
+    public SleepResponse updateSleep(UUID userId, UUID id, SleepUpdateRequest req) {
+        SleepLogEntity e = sleepRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sleep log not found"));
+        if (req.getSleepDate()     != null) e.setSleepDate(req.getSleepDate());
+        if (req.getBedtime()       != null) e.setBedtime(req.getBedtime());
+        if (req.getWakeTime()      != null) e.setWakeTime(req.getWakeTime());
+        if (req.getQualityRating() != null) e.setQualityRating(req.getQualityRating());
+        if (req.getNotes()         != null) e.setNotes(req.getNotes());
+        if (e.getBedtime() != null && e.getWakeTime() != null) {
+            long mins = java.time.Duration.between(e.getBedtime(), e.getWakeTime()).toMinutes();
+            if (mins < 0) mins += 1440;
+            e.setDurationHours(BigDecimal.valueOf(mins).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP));
+        }
+        return toSleepResponse(sleepRepo.save(e));
+    }
+
+    // ── GET /fitness/hydration/history ────────────────────────────
+    public PageResponse<HydrationResponse> listHydration(UUID userId, Pageable pageable) {
+        return PageResponse.of(
+                hydrationRepo.findByUserIdOrderByLoggedDateDesc(userId, pageable).map(this::toHydrationResponse));
+    }
+
+    // ── PUT /fitness/hydration/{id} ───────────────────────────────
+    @Transactional
+    public HydrationResponse updateHydration(UUID userId, UUID id, HydrationUpdateRequest req) {
+        HydrationLogEntity e = hydrationRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Hydration log not found"));
+        if (req.getAmountMl() != null) e.setAmountMl(req.getAmountMl());
+        if (req.getTargetMl() != null) e.setTargetMl(req.getTargetMl());
+        return toHydrationResponse(hydrationRepo.save(e));
+    }
+
+    // ── GET /fitness/mood ─────────────────────────────────────────
+    public PageResponse<MoodResponse> listMood(UUID userId, Pageable pageable) {
+        return PageResponse.of(
+                moodRepo.findByUserIdOrderByLoggedDateDesc(userId, pageable).map(this::toMoodResponse));
+    }
+
+    // ── PUT /fitness/mood/{id} ────────────────────────────────────
+    @Transactional
+    public MoodResponse updateMood(UUID userId, UUID id, MoodUpdateRequest req) {
+        MoodLogEntity e = moodRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mood log not found"));
+        if (req.getMood()        != null) e.setMood(req.getMood().toUpperCase());
+        if (req.getEnergyLevel() != null) e.setEnergyLevel(req.getEnergyLevel());
+        if (req.getNotes()       != null) e.setNotes(req.getNotes());
+        return toMoodResponse(moodRepo.save(e));
+    }
+
+    // ── GET /fitness/metrics/stats ────────────────────────────────
+    public BodyMetricStatsResponse getMetricStats(UUID userId) {
+        Pageable one = PageRequest.of(0, 1);
+        List<BodyMetricEntity> wList = metricRepo.findLatestByUserIdAndMetricType(userId, "WEIGHT", one);
+        List<BodyMetricEntity> hList = metricRepo.findLatestByUserIdAndMetricType(userId, "HEIGHT", one);
+
+        BigDecimal weightKg = wList.isEmpty() ? null : normaliseWeight(wList.get(0));
+        BigDecimal heightCm = hList.isEmpty() ? null : normaliseHeight(hList.get(0));
+
+        BigDecimal bmi = null;
+        String bmiCategory = null;
+        BigDecimal tdeeKcal = null;
+
+        if (weightKg != null && heightCm != null) {
+            BigDecimal hM = heightCm.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            bmi = weightKg.divide(hM.multiply(hM), 1, RoundingMode.HALF_UP);
+            double d = bmi.doubleValue();
+            bmiCategory = d < 18.5 ? "Underweight" : d < 25.0 ? "Normal" : d < 30.0 ? "Overweight" : "Obese";
+            // Mifflin-St Jeor base without age/gender (30yr male assumption for TDEE estimate)
+            BigDecimal bmrBase = BigDecimal.valueOf(10).multiply(weightKg)
+                    .add(BigDecimal.valueOf(6.25).multiply(heightCm))
+                    .subtract(BigDecimal.valueOf(150)).add(BigDecimal.valueOf(5));
+            tdeeKcal = bmrBase.multiply(BigDecimal.valueOf(1.55)).setScale(0, RoundingMode.HALF_UP);
+        }
+
+        return BodyMetricStatsResponse.builder()
+                .latestWeightKg(weightKg)
+                .latestHeightCm(heightCm)
+                .bmi(bmi).bmiCategory(bmiCategory).tdeeKcal(tdeeKcal)
+                .weightDate(wList.isEmpty() ? null : wList.get(0).getLoggedDate())
+                .heightDate(hList.isEmpty() ? null : hList.get(0).getLoggedDate())
+                .build();
+    }
+
+    // ── GET /fitness/metrics/trends ───────────────────────────────
+    public MetricTrendsResponse getMetricTrends(UUID userId, String type, int days) {
+        List<BodyMetricEntity> raw = metricRepo.findTrendData(userId, type.toUpperCase(), LocalDate.now().minusDays(days));
+        List<MetricTrendPoint> points = raw.stream()
+                .map(e -> MetricTrendPoint.builder().date(e.getLoggedDate()).value(e.getValue()).unit(e.getUnit()).build())
+                .collect(Collectors.toList());
+        return MetricTrendsResponse.builder().metricType(type.toUpperCase()).dataPoints(points).totalPoints(points.size()).build();
+    }
+
+    // ── GET /fitness/summary/monthly ─────────────────────────────
+    public MonthlySummaryDTO getMonthlySummary(UUID userId, String month) {
+        java.time.YearMonth ym = java.time.YearMonth.parse(month);
+        int yr = ym.getYear(), mo = ym.getMonthValue();
+
+        List<String> moods = moodRepo.findMoodsForMonth(userId, yr, mo);
+        double avgMood = moods.stream().mapToInt(m -> switch (m.toUpperCase()) {
+            case "GREAT" -> 5; case "GOOD" -> 4; case "NEUTRAL" -> 3; case "TIRED" -> 2; default -> 1;
+        }).average().orElse(0);
+
+        long totalCalIn = mealRepo.sumCaloriesForMonth(userId, yr, mo);
+        long activeDays = mealRepo.countDistinctDaysForMonth(userId, yr, mo);
+        BigDecimal avgDailyCal = activeDays > 0
+                ? BigDecimal.valueOf(totalCalIn).divide(BigDecimal.valueOf(activeDays), 1, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        BigDecimal vol = workoutRepo.sumVolumeForMonth(userId, yr, mo);
+
+        return MonthlySummaryDTO.builder()
+                .year(yr).month(mo)
+                .totalWorkouts((int) workoutRepo.countForMonth(userId, yr, mo))
+                .totalCardioSessions((int) cardioRepo.countForMonth(userId, yr, mo))
+                .totalCaloriesBurned(cardioRepo.sumCaloriesForMonth(userId, yr, mo))
+                .totalVolumeKg(vol != null ? vol : BigDecimal.ZERO)
+                .avgSleepHours(BigDecimal.valueOf(sleepRepo.avgDurationHoursForMonth(userId, yr, mo)).setScale(1, RoundingMode.HALF_UP))
+                .avgMoodScore(BigDecimal.valueOf(avgMood).setScale(1, RoundingMode.HALF_UP))
+                .totalHydrationMl(hydrationRepo.sumAmountForMonth(userId, yr, mo))
+                .avgDailyCalories(avgDailyCal)
+                .workoutStreakEnd(calculateWorkoutStreak(userId))
+                .build();
+    }
+
+    // ── GET /fitness/targets ─────────────────────────────────────
+    public FitnessTargetResponse getTargets(UUID userId) {
+        return targetRepo.findByUserId(userId).map(e -> FitnessTargetResponse.builder()
+                        .id(e.getId()).weeklyWorkoutTarget(e.getWeeklyWorkoutTarget())
+                        .dailyCalorieTarget(e.getDailyCalorieTarget()).dailyProteinTargetG(e.getDailyProteinTargetG())
+                        .dailyHydrationTargetMl(e.getDailyHydrationTargetMl()).dailyCalorieBurnTarget(e.getDailyCalorieBurnTarget())
+                        .updatedAt(e.getUpdatedAt()).build())
+                .orElseGet(() -> FitnessTargetResponse.builder().build());
+    }
+
+    // ── PUT /fitness/targets ──────────────────────────────────────
+    @Transactional
+    public FitnessTargetResponse upsertTargets(UUID userId, FitnessTargetRequest req) {
+        FitnessTargetEntity e = targetRepo.findByUserId(userId)
+                .orElseGet(() -> FitnessTargetEntity.builder().userId(userId).build());
+        if (req.getWeeklyWorkoutTarget()     != null) e.setWeeklyWorkoutTarget(req.getWeeklyWorkoutTarget());
+        if (req.getDailyCalorieTarget()      != null) e.setDailyCalorieTarget(req.getDailyCalorieTarget());
+        if (req.getDailyProteinTargetG()     != null) e.setDailyProteinTargetG(req.getDailyProteinTargetG());
+        if (req.getDailyHydrationTargetMl()  != null) e.setDailyHydrationTargetMl(req.getDailyHydrationTargetMl());
+        if (req.getDailyCalorieBurnTarget()  != null) e.setDailyCalorieBurnTarget(req.getDailyCalorieBurnTarget());
+        FitnessTargetEntity saved = targetRepo.save(e);
+        return FitnessTargetResponse.builder().id(saved.getId()).weeklyWorkoutTarget(saved.getWeeklyWorkoutTarget())
+                .dailyCalorieTarget(saved.getDailyCalorieTarget()).dailyProteinTargetG(saved.getDailyProteinTargetG())
+                .dailyHydrationTargetMl(saved.getDailyHydrationTargetMl())
+                .dailyCalorieBurnTarget(saved.getDailyCalorieBurnTarget()).updatedAt(saved.getUpdatedAt()).build();
+    }
+
+    // ── GET /fitness/workouts/prs ─────────────────────────────────
+    public List<WorkoutPRResponse> getWorkoutPRs(UUID userId) {
+        List<WorkoutExerciseEntity> all = workoutExerciseRepo.findAllByUserId(userId);
+        Map<String, List<WorkoutExerciseEntity>> grouped = all.stream()
+                .collect(Collectors.groupingBy(e -> e.getExerciseName().toLowerCase()));
+        return grouped.entrySet().stream().map(entry -> {
+            List<WorkoutExerciseEntity> sets = entry.getValue();
+            String name = sets.get(0).getExerciseName();
+            WorkoutExerciseEntity maxWt = sets.stream().filter(s -> s.getWeightKg() != null)
+                    .max(Comparator.comparing(WorkoutExerciseEntity::getWeightKg)).orElse(null);
+            WorkoutExerciseEntity maxRp = sets.stream().filter(s -> s.getReps() != null)
+                    .max(Comparator.comparing(WorkoutExerciseEntity::getReps)).orElse(null);
+            WorkoutExerciseEntity maxVol = sets.stream().filter(s -> s.getWeightKg() != null && s.getReps() != null)
+                    .max(Comparator.comparing(s -> s.getWeightKg().multiply(BigDecimal.valueOf(s.getReps())))).orElse(null);
+            BigDecimal vol = maxVol != null ? maxVol.getWeightKg().multiply(BigDecimal.valueOf(maxVol.getReps())) : null;
+            LocalDate achieved = maxVol != null
+                    ? workoutRepo.findById(maxVol.getSessionId()).map(WorkoutSessionEntity::getSessionDate).orElse(null)
+                    : null;
+            return WorkoutPRResponse.builder().exerciseName(name)
+                    .maxWeightKg(maxWt != null ? maxWt.getWeightKg() : null)
+                    .maxReps(maxRp != null ? maxRp.getReps() : null)
+                    .maxVolumeKg(vol).achievedOn(achieved).build();
+        }).sorted(Comparator.comparing(WorkoutPRResponse::getExerciseName)).collect(Collectors.toList());
+    }
+
+    // ── private helpers (ADD these, they're NEW) ─────────────────
+    private List<ExerciseSetResponse> persistExerciseSets(UUID sessionId, List<ExerciseSetRequest> requests, WorkoutSessionEntity session) {
+        if (requests == null || requests.isEmpty()) return Collections.emptyList();
+        List<WorkoutExerciseEntity> entities = requests.stream()
+                .map(s -> WorkoutExerciseEntity.builder().sessionId(sessionId)
+                        .exerciseName(s.getExerciseName()).setNumber(s.getSetNumber())
+                        .reps(s.getReps()).weightKg(s.getWeightKg()).durationSeconds(s.getDurationSeconds()).build())
+                .collect(Collectors.toList());
+        List<WorkoutExerciseEntity> saved = workoutExerciseRepo.saveAll(entities);
+        BigDecimal totalVolume = saved.stream()
+                .filter(s -> s.getReps() != null && s.getWeightKg() != null)
+                .map(s -> s.getWeightKg().multiply(BigDecimal.valueOf(s.getReps())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        session.setTotalVolumeKg(totalVolume);
+        return saved.stream().map(ex -> ExerciseSetResponse.builder()
+                .exerciseName(ex.getExerciseName()).setNumber(ex.getSetNumber())
+                .reps(ex.getReps()).weightKg(ex.getWeightKg()).build()).collect(Collectors.toList());
+    }
+
+    private List<ExerciseSetResponse> loadSets(UUID sessionId) {
+        return workoutExerciseRepo.findBySessionIdOrderBySetNumberAsc(sessionId).stream()
+                .map(ex -> ExerciseSetResponse.builder().exerciseName(ex.getExerciseName())
+                        .setNumber(ex.getSetNumber()).reps(ex.getReps()).weightKg(ex.getWeightKg()).build())
+                .collect(Collectors.toList());
+    }
+
+    private BigDecimal normaliseWeight(BodyMetricEntity e) {
+        if ("lbs".equalsIgnoreCase(e.getUnit()))
+            return e.getValue().multiply(BigDecimal.valueOf(0.453592)).setScale(2, RoundingMode.HALF_UP);
+        return e.getValue();
+    }
+
+    private BigDecimal normaliseHeight(BodyMetricEntity e) {
+        if ("m".equalsIgnoreCase(e.getUnit()))
+            return e.getValue().multiply(BigDecimal.valueOf(100)).setScale(1, RoundingMode.HALF_UP);
+        return e.getValue();
     }
 
     // ── PRIVATE ──────────────────────────────────────────────────
