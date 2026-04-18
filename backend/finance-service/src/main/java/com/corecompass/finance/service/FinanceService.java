@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import com.corecompass.finance.dto.ExpenseCategoryRequest;
 import com.corecompass.finance.dto.IncomeSourceResponse;
 import com.corecompass.finance.dto.SavingsGoalUpdateRequest;
+import com.corecompass.finance.dto.PaymentMethodRequest;
 
 @Slf4j @Service @RequiredArgsConstructor
 public class FinanceService {
@@ -45,6 +46,42 @@ public class FinanceService {
             PaymentMethodDTO.builder().id(p.getId()).name(p.getName())
                 .icon(p.getIcon()).isSystem(p.isSystem()).build()
         ).collect(Collectors.toList());
+    }
+    @Transactional
+    public PaymentMethodDTO createPaymentMethod(UUID userId, PaymentMethodRequest req) {
+        if (paymentMethodRepo.existsByNameAndCreatedBy(req.getName(), userId)) {
+            throw new RuntimeException("You already have a payment method named '" + req.getName() + "'");
+        }
+        PaymentMethodEntity e = PaymentMethodEntity.builder()
+                .name(req.getName().trim())
+                .icon(req.getIcon())
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        PaymentMethodEntity saved = paymentMethodRepo.save(e);
+        log.info("Payment method created: {} userId={}", saved.getName(), userId);
+        return PaymentMethodDTO.builder()
+                .id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).isSystem(false).build();
+    }
+
+    @Transactional
+    public PaymentMethodDTO updatePaymentMethod(UUID userId, UUID id, PaymentMethodRequest req) {
+        PaymentMethodEntity e = paymentMethodRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new RuntimeException("Payment method not found or not yours to edit"));
+        if (req.getName() != null) e.setName(req.getName().trim());
+        if (req.getIcon()  != null) e.setIcon(req.getIcon());
+        PaymentMethodEntity saved = paymentMethodRepo.save(e);
+        return PaymentMethodDTO.builder()
+                .id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).isSystem(false).build();
+    }
+
+    @Transactional
+    public void deletePaymentMethod(UUID userId, UUID id) {
+        PaymentMethodEntity e = paymentMethodRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new RuntimeException("Payment method not found or not yours to delete"));
+        paymentMethodRepo.delete(e);
     }
 
     // ─── EXPENSES ─────────────────────────────────────────────

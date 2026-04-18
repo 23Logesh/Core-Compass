@@ -7,10 +7,16 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface PaymentMethodRepository extends JpaRepository<PaymentMethodEntity, UUID> {
+
     @Query("SELECT p FROM PaymentMethodEntity p WHERE p.isSystem=true OR p.createdBy=:u ORDER BY p.name ASC")
     List<PaymentMethodEntity> findAvailableForUser(@Param("u") UUID u);
+
+    Optional<PaymentMethodEntity> findByIdAndCreatedBy(UUID id, UUID createdBy);
+
+    boolean existsByNameAndCreatedBy(String name, UUID createdBy);
 }

@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
-import com.corecompass.finance.dto.RecurringExpenseRequest;
-import com.corecompass.finance.dto.RecurringExpenseResponse;
 
 @RestController @RequiredArgsConstructor
 public class FinanceController {
@@ -50,6 +48,29 @@ public class FinanceController {
     @GetMapping("/api/v1/finance/payment-methods")
     public ResponseEntity<ApiResponse<List<PaymentMethodDTO>>> listPaymentMethods(@RequestHeader("X-User-Id") UUID uid) {
         return ResponseEntity.ok(ApiResponse.ok(svc.listPaymentMethods(uid), null));
+    }
+    @PostMapping("/api/v1/finance/payment-methods")
+    public ResponseEntity<ApiResponse<PaymentMethodDTO>> createPaymentMethod(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody PaymentMethodRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createPaymentMethod(uid, req), "Payment method created"));
+    }
+
+    @PutMapping("/api/v1/finance/payment-methods/{id}")
+    public ResponseEntity<ApiResponse<PaymentMethodDTO>> updatePaymentMethod(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody PaymentMethodRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updatePaymentMethod(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/finance/payment-methods/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePaymentMethod(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deletePaymentMethod(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
     }
 
     // ── EXPENSES ─────────────────────────────────────────────
