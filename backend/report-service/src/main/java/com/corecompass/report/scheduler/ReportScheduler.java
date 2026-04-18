@@ -32,6 +32,7 @@ public class ReportScheduler {
     private final FinanceClient       financeClient;
     private final HabitsClient        habitsClient;
     private final WeeklyReportRepository reportRepo;
+    private final NotificationClient     notificationClient;
 
     // Every Monday 08:00 IST
     @Scheduled(cron = "0 0 8 * * MON", zone = "Asia/Kolkata")
@@ -152,6 +153,17 @@ public class ReportScheduler {
 
             reportRepo.save(report);
             log.info("Manual report saved: userId={} week={}", userId, weekStart);
+
+            // Push in-app notification — best effort (fallback handles failure)
+            String topInsight = insights.isEmpty()
+                    ? "Your weekly summary is ready. Check it out!"
+                    : insights.getFirst();
+            notificationClient.createNotification(
+                    userId,
+                    "WEEKLY_REPORT",
+                    "📊 Your Weekly Report is Ready",
+                    topInsight
+            );
 
         } catch (Exception ex) {
             log.error("Failed to generate report for userId={} week={}: {} from generateForUserAndWeek", userId, weekStart, ex.getMessage());

@@ -260,6 +260,7 @@ class DashboardController {
 class InternalCoreController {
 
     private final GoalService goalService;
+    private final NotificationService notificationService;
 
     @GetMapping("/active-users")
     public ResponseEntity<List<UUID>> getActiveUserIds() {
@@ -270,6 +271,16 @@ class InternalCoreController {
     public ResponseEntity<GoalProgressSummaryDTO> getGoalProgress(
             @RequestParam UUID userId) {
         return ResponseEntity.ok(goalService.getGoalProgressSummary(userId));
+    }
+
+    @PostMapping("/notifications")
+    public ResponseEntity<Void> createNotification(
+            @RequestParam UUID userId,
+            @RequestParam String type,
+            @RequestParam String title,
+            @RequestParam String message) {
+        notificationService.createNotification(userId, type, title, message);
+        return ResponseEntity.ok().build();
     }
 
 }
