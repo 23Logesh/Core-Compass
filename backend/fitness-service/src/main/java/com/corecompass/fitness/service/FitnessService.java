@@ -39,6 +39,9 @@ public class FitnessService {
     private final FoodRepository               foodRepo;
     private final DietPlanRepository           dietPlanRepo;
     private final DietPlanMealRepository       dietPlanMealRepo;
+    private final SupplementTypeRepository     supplementTypeRepo;
+    private final SupplementLogRepository      supplementLogRepo;
+    private final SupplementScheduleRepository supplementScheduleRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -597,6 +600,138 @@ public class FitnessService {
                         HttpStatus.NOT_FOUND, "No active plan found"));
     }
 
+    // ── SUPPLEMENT TYPES ──────────────────────────────────────────
+
+    public List<SupplementTypeResponse> listSupplementTypes(UUID userId) {
+        return supplementTypeRepo.findAvailableForUser(userId)
+                .stream().map(this::toSupplementTypeResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SupplementTypeResponse createSupplementType(UUID userId, SupplementTypeRequest req) {
+        if (supplementTypeRepo.existsByNameAndCreatedBy(req.getName(), userId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "You already have a supplement type named '" + req.getName() + "'");
+        }
+        SupplementTypeEntity e = SupplementTypeEntity.builder()
+                .name(req.getName().trim())
+                .category(req.getCategory() != null ? req.getCategory().toUpperCase() : "OTHER")
+                .description(req.getDescription())
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        return toSupplementTypeResponse(supplementTypeRepo.save(e));
+    }
+
+    @Transactional
+    public SupplementTypeResponse updateSupplementType(UUID userId, UUID typeId,
+                                                       SupplementTypeRequest req) {
+        SupplementTypeEntity e = supplementTypeRepo.findByIdAndCreatedBy(typeId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Supplement type not found or not yours to edit"));
+        if (req.getName()        != null) e.setName(req.getName().trim());
+        if (req.getCategory()    != null) e.setCategory(req.getCategory().toUpperCase());
+        if (req.getDescription() != null) e.setDescription(req.getDescription());
+        return toSupplementTypeResponse(supplementTypeRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteSupplementType(UUID userId, UUID typeId) {
+        SupplementTypeEntity e = supplementTypeRepo.findByIdAndCreatedBy(typeId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Supplement type not found or not yours to delete"));
+        supplementTypeRepo.delete(e);
+    }
+
+// ── SUPPLEMENT LOGS ───────────────────────────────────────────
+
+    public PageResponse<SupplementLogResponse> listSupplementLogs(UUID userId, Pageable pageable) {
+        return PageResponse.of(
+                supplementLogRepo.findByUserIdAndIsDeletedFalseOrderByLoggedDateDescCreatedAtDesc(
+                        userId, pageable).map(e -> toSupplementLogResponse(e)));
+    }
+
+    public List<SupplementLogResponse> getTodaySupplementLogs(UUID userId) {
+        return supplementLogRepo
+                .findByUserIdAndLoggedDateAndIsDeletedFalse(userId, LocalDate.now())
+                .stream().map(this::toSupplementLogResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SupplementLogResponse logSupplement(UUID userId, SupplementLogRequest req) {
+        // Validate type exists and is visible to this user
+        supplementTypeRepo.findById(req.getSupplementTypeId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Supplement type not found"));
+
+        SupplementLogEntity e = SupplementLogEntity.builder()
+                .userId(userId)
+                .supplementTypeId(req.getSupplementTypeId())
+                .doseAmount(req.getDoseAmount())
+                .doseUnit(req.getDoseUnit().toUpperCase())
+                .timing(req.getTiming() != null ? req.getTiming().toUpperCase() : null)
+                .loggedDate(req.getLoggedDate() != null ? req.getLoggedDate() : LocalDate.now())
+                .notes(req.getNotes())
+                .build();
+        log.info("Supplement logged: typeId={} userId={}", req.getSupplementTypeId(), userId);
+        return toSupplementLogResponse(supplementLogRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteSupplementLog(UUID userId, UUID logId) {
+        SupplementLogEntity e = supplementLogRepo.findByIdAndUserId(logId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Supplement log not found"));
+        e.setDeleted(true);
+        supplementLogRepo.save(e);
+    }
+
+// ── SUPPLEMENT SCHEDULES ──────────────────────────────────────
+
+    public List<SupplementScheduleResponse> listSchedules(UUID userId) {
+        return supplementScheduleRepo.findByUserIdAndIsActiveTrueOrderByTimingAsc(userId)
+                .stream().map(this::toSupplementScheduleResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SupplementScheduleResponse createSchedule(UUID userId, SupplementScheduleRequest req) {
+        supplementTypeRepo.findById(req.getSupplementTypeId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Supplement type not found"));
+
+        SupplementScheduleEntity e = SupplementScheduleEntity.builder()
+                .userId(userId)
+                .supplementTypeId(req.getSupplementTypeId())
+                .doseAmount(req.getDoseAmount())
+                .doseUnit(req.getDoseUnit().toUpperCase())
+                .timing(req.getTiming().toUpperCase())
+                .frequency(req.getFrequency() != null ? req.getFrequency().toUpperCase() : "DAILY")
+                .build();
+        return toSupplementScheduleResponse(supplementScheduleRepo.save(e));
+    }
+
+    @Transactional
+    public SupplementScheduleResponse updateSchedule(UUID userId, UUID scheduleId,
+                                                     SupplementScheduleRequest req) {
+        SupplementScheduleEntity e = supplementScheduleRepo.findByIdAndUserId(scheduleId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Schedule not found"));
+        if (req.getDoseAmount() != null) e.setDoseAmount(req.getDoseAmount());
+        if (req.getDoseUnit()   != null) e.setDoseUnit(req.getDoseUnit().toUpperCase());
+        if (req.getTiming()     != null) e.setTiming(req.getTiming().toUpperCase());
+        if (req.getFrequency()  != null) e.setFrequency(req.getFrequency().toUpperCase());
+        return toSupplementScheduleResponse(supplementScheduleRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteSchedule(UUID userId, UUID scheduleId) {
+        SupplementScheduleEntity e = supplementScheduleRepo.findByIdAndUserId(scheduleId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Schedule not found"));
+        e.setActive(false);   // soft-deactivate, not hard-delete
+        supplementScheduleRepo.save(e);
+    }
+
     // ── FOOD LIBRARY ─────────────────────────────────────────────
 
     public List<FoodResponse> listFoods(UUID userId, String search) {
@@ -1009,6 +1144,36 @@ public class FitnessService {
                 .dailyProteinG(e.getDailyProteinG()).dailyCarbsG(e.getDailyCarbsG())
                 .dailyFatG(e.getDailyFatG()).isActive(e.isActive())
                 .meals(meals).createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
+                .build();
+    }
+
+    private SupplementTypeResponse toSupplementTypeResponse(SupplementTypeEntity e) {
+        return SupplementTypeResponse.builder()
+                .id(e.getId()).name(e.getName()).category(e.getCategory())
+                .description(e.getDescription()).isSystem(e.isSystem())
+                .build();
+    }
+
+    private SupplementLogResponse toSupplementLogResponse(SupplementLogEntity e) {
+        SupplementTypeEntity type = supplementTypeRepo.findById(e.getSupplementTypeId()).orElse(null);
+        return SupplementLogResponse.builder()
+                .id(e.getId()).supplementTypeId(e.getSupplementTypeId())
+                .supplementTypeName(type  != null ? type.getName()     : null)
+                .supplementTypeCategory(type != null ? type.getCategory() : null)
+                .doseAmount(e.getDoseAmount()).doseUnit(e.getDoseUnit())
+                .timing(e.getTiming()).loggedDate(e.getLoggedDate())
+                .notes(e.getNotes()).createdAt(e.getCreatedAt())
+                .build();
+    }
+
+    private SupplementScheduleResponse toSupplementScheduleResponse(SupplementScheduleEntity e) {
+        SupplementTypeEntity type = supplementTypeRepo.findById(e.getSupplementTypeId()).orElse(null);
+        return SupplementScheduleResponse.builder()
+                .id(e.getId()).supplementTypeId(e.getSupplementTypeId())
+                .supplementTypeName(type != null ? type.getName() : null)
+                .doseAmount(e.getDoseAmount()).doseUnit(e.getDoseUnit())
+                .timing(e.getTiming()).frequency(e.getFrequency())
+                .isActive(e.isActive()).createdAt(e.getCreatedAt())
                 .build();
     }
 

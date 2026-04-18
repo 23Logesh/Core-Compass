@@ -451,4 +451,103 @@ public class FitnessController {
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(svc.activateDietPlan(uid, id), "Diet plan activated"));
     }
+
+    // ── SUPPLEMENT TYPES ───────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/supplement-types")
+    public ResponseEntity<ApiResponse<List<SupplementTypeResponse>>> listSupplementTypes(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listSupplementTypes(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/supplement-types")
+    public ResponseEntity<ApiResponse<SupplementTypeResponse>> createSupplementType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody SupplementTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createSupplementType(uid, req), "Supplement type created"));
+    }
+
+    @PutMapping("/api/v1/fitness/supplement-types/{id}")
+    public ResponseEntity<ApiResponse<SupplementTypeResponse>> updateSupplementType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody SupplementTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                svc.updateSupplementType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/supplement-types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSupplementType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteSupplementType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+// ── SUPPLEMENT LOGS ────────────────────────────────────────────────────
+
+    @PostMapping("/api/v1/fitness/supplements/log")
+    public ResponseEntity<ApiResponse<SupplementLogResponse>> logSupplement(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody SupplementLogRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.logSupplement(uid, req), "Supplement logged"));
+    }
+
+    @GetMapping("/api/v1/fitness/supplements/log")
+    public ResponseEntity<ApiResponse<PageResponse<SupplementLogResponse>>> listSupplementLogs(
+            @RequestHeader("X-User-Id") UUID uid,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                svc.listSupplementLogs(uid, PageRequest.of(page, size)), null));
+    }
+
+    @GetMapping("/api/v1/fitness/supplements/log/today")
+    public ResponseEntity<ApiResponse<List<SupplementLogResponse>>> todaySupplementLogs(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getTodaySupplementLogs(uid), null));
+    }
+
+    @DeleteMapping("/api/v1/fitness/supplements/log/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSupplementLog(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteSupplementLog(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+// ── SUPPLEMENT SCHEDULES ───────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/supplements/schedule")
+    public ResponseEntity<ApiResponse<List<SupplementScheduleResponse>>> listSchedules(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listSchedules(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/supplements/schedule")
+    public ResponseEntity<ApiResponse<SupplementScheduleResponse>> createSchedule(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody SupplementScheduleRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createSchedule(uid, req), "Schedule created"));
+    }
+
+    @PutMapping("/api/v1/fitness/supplements/schedule/{id}")
+    public ResponseEntity<ApiResponse<SupplementScheduleResponse>> updateSchedule(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody SupplementScheduleRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                svc.updateSchedule(uid, id, req), "Schedule updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/supplements/schedule/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSchedule(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteSchedule(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Schedule deactivated"));
+    }
 }
