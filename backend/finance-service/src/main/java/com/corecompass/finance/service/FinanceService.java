@@ -13,6 +13,10 @@ import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.corecompass.finance.dto.ExpenseCategoryRequest;
+import com.corecompass.finance.dto.IncomeSourceResponse;
+import com.corecompass.finance.dto.SavingsGoalUpdateRequest;
+
 @Slf4j @Service @RequiredArgsConstructor
 public class FinanceService {
     private final ExpenseRepository         expenseRepo;
@@ -349,6 +353,73 @@ public class FinanceService {
             .healthScore(getHealthScore(userId).getScore()).build();
     }
 
+    // ── EXPENSE CATEGORY CRUD ────────────────────────────────────
+
+    @Transactional
+    public ExpenseCategoryDTO createCategory(UUID userId, ExpenseCategoryRequest req) {
+        if (categoryRepo.existsByNameAndCreatedBy(req.getName(), userId)) {
+            throw new IllegalArgumentException("You already have a category named '" + req.getName() + "'");
+        }
+        ExpenseCategoryEntity e = ExpenseCategoryEntity.builder()
+                .name(req.getName().trim())
+                .icon(req.getIcon())
+                .color(req.getColor())
+                .parentId(req.getParentId())
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        return toCategoryDTO(categoryRepo.save(e));
+    }
+
+    @Transactional
+    public ExpenseCategoryDTO updateCategory(UUID userId, UUID categoryId, ExpenseCategoryRequest req) {
+        ExpenseCategoryEntity e = categoryRepo.findByIdAndCreatedBy(categoryId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Category not found or not editable"));
+        if (req.getName()  != null) e.setName(req.getName().trim());
+        if (req.getIcon()  != null) e.setIcon(req.getIcon());
+        if (req.getColor() != null) e.setColor(req.getColor());
+        return toCategoryDTO(categoryRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteCategory(UUID userId, UUID categoryId) {
+        ExpenseCategoryEntity e = categoryRepo.findByIdAndCreatedBy(categoryId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Category not found or not editable"));
+        categoryRepo.delete(e);
+    }
+
+// ── INCOME SOURCES ────────────────────────────────────────────
+
+    public List<IncomeSourceResponse> getIncomeSources(UUID userId) {
+        return incomeRepo.findSourceSummaries(userId).stream()
+                .map(row -> IncomeSourceResponse.builder()
+                        .sourceType((String)  row[0])
+                        .timesLogged((Long)   row[1])
+                        .totalAmount((java.math.BigDecimal) row[2])
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+// ── SAVINGS GOAL UPDATE + DELETE ──────────────────────────────
+
+    @Transactional
+    public SavingsGoalResponse updateSavingsGoal(UUID userId, UUID goalId, SavingsGoalUpdateRequest req) {
+        SavingsGoalEntity e = savingsRepo.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Savings goal not found"));
+        if (req.getTitle()        != null) e.setTitle(req.getTitle());
+        if (req.getTargetAmount() != null) e.setTargetAmount(req.getTargetAmount());
+        if (req.getTargetDate()   != null) e.setTargetDate(req.getTargetDate());
+        return toSavingsResp(savingsRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteSavingsGoal(UUID userId, UUID goalId) {
+        SavingsGoalEntity e = savingsRepo.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Savings goal not found"));
+        e.setDeleted(true);
+        savingsRepo.save(e);
+    }
+
     // ─── MAPPERS ──────────────────────────────────────────────
     private ExpenseResponse toExpenseResp(ExpenseEntity e) {
         ExpenseCategoryEntity cat = categoryRepo.findById(e.getCategoryId()).orElse(null);
@@ -373,6 +444,17 @@ public class FinanceService {
             .targetAmount(e.getTargetAmount()).currentAmount(e.getCurrentAmount())
             .targetDate(e.getTargetDate()).progressPct(pct).createdAt(e.getCreatedAt()).build();
     }
+
+    private ExpenseCategoryDTO toCategoryDTO(ExpenseCategoryEntity e) {
+        return ExpenseCategoryDTO.builder()
+                .id(e.getId())
+                .name(e.getName())
+                .icon(e.getIcon())
+                .color(e.getColor())
+                .isSystem(e.isSystem())
+                .build();
+    }
+
     private DebtResponse toDebtResp(DebtEntity e) {
         return DebtResponse.builder().id(e.getId()).name(e.getName()).debtType(e.getDebtType())
             .principalAmount(e.getPrincipalAmount()).currentBalance(e.getCurrentBalance())

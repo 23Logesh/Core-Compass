@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 
 @Repository
 public interface ExpenseCategoryRepository extends JpaRepository<ExpenseCategoryEntity, UUID> {
@@ -15,4 +16,8 @@ public interface ExpenseCategoryRepository extends JpaRepository<ExpenseCategory
     List<ExpenseCategoryEntity> findAvailableForUser(@Param("u") UUID u);
 
     List<ExpenseCategoryEntity> findByIsSystemTrue();
+
+    Optional<ExpenseCategoryEntity> findByIdAndCreatedBy(UUID id, UUID createdBy);
+
+    boolean existsByNameAndCreatedBy(String name, UUID createdBy);
 }

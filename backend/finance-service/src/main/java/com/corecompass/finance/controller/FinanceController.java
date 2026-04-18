@@ -20,6 +20,30 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(svc.listCategories(uid), null));
     }
 
+    @PostMapping("/api/v1/finance/expense-categories")
+    public ResponseEntity<ApiResponse<ExpenseCategoryDTO>> createCategory(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody ExpenseCategoryRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createCategory(uid, req), "Category created"));
+    }
+
+    @PutMapping("/api/v1/finance/expense-categories/{id}")
+    public ResponseEntity<ApiResponse<ExpenseCategoryDTO>> updateCategory(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody ExpenseCategoryRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateCategory(uid, id, req), "Category updated"));
+    }
+
+    @DeleteMapping("/api/v1/finance/expense-categories/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteCategory(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteCategory(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Category deleted"));
+    }
+
     // ── PAYMENT METHODS ──────────────────────────────────────
     @GetMapping("/api/v1/finance/payment-methods")
     public ResponseEntity<ApiResponse<List<PaymentMethodDTO>>> listPaymentMethods(@RequestHeader("X-User-Id") UUID uid) {
@@ -89,6 +113,12 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
     }
 
+    @GetMapping("/api/v1/finance/income/sources")
+    public ResponseEntity<ApiResponse<List<IncomeSourceResponse>>> getIncomeSources(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getIncomeSources(uid), null));
+    }
+
     // ── BUDGETS ──────────────────────────────────────────────
     @GetMapping("/api/v1/finance/budgets")
     public ResponseEntity<ApiResponse<List<BudgetStatusResponse>>> getBudgets(
@@ -131,6 +161,22 @@ public class FinanceController {
             @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id,
             @RequestParam BigDecimal amount) {
         return ResponseEntity.ok(ApiResponse.ok(svc.contribute(uid, id, amount), "Contribution added"));
+    }
+
+    @PutMapping("/api/v1/finance/savings-goals/{id}")
+    public ResponseEntity<ApiResponse<SavingsGoalResponse>> updateSavingsGoal(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody SavingsGoalUpdateRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateSavingsGoal(uid, id, req), "Savings goal updated"));
+    }
+
+    @DeleteMapping("/api/v1/finance/savings-goals/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSavingsGoal(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteSavingsGoal(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Savings goal deleted"));
     }
 
     // ── DEBTS ────────────────────────────────────────────────
