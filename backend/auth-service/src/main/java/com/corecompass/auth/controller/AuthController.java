@@ -77,15 +77,23 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok(auth, "Token refreshed successfully"));
     }
 
-    // ── POST /api/v1/auth/logout ───────────────────────────────────────────
-    // Protected — X-User-Id injected by gateway JWT filter
+    // ── POST /api/v1/auth/logout — current session only ──────────
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader("X-User-Id") UUID userId,
+            @CookieValue(name = "refresh_token", required = false) String rawRefreshToken,
             HttpServletResponse response) {
+        authService.logout(userId, rawRefreshToken, response);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Logged out from this device"));
+    }
 
-        authService.logout(userId, response);
-        return ResponseEntity.ok(ApiResponse.ok(null, "Logged out successfully"));
+    // ── POST /api/v1/auth/logout-all — all sessions ───────────────
+    @PostMapping("/logout-all")
+    public ResponseEntity<ApiResponse<Void>> logoutAll(
+            @RequestHeader("X-User-Id") UUID userId,
+            HttpServletResponse response) {
+        authService.logoutAll(userId, response);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Logged out from all devices"));
     }
 
     // ── GET /api/v1/auth/me ────────────────────────────────────────────────

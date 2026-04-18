@@ -131,11 +131,28 @@ public class AuthService {
     // LOGOUT
     // ──────────────────────────────────────────────────────────
 
+    // ── Logout current session only ───────────────────────────────
     @Transactional
-    public void logout(UUID userId, HttpServletResponse response) {
+    public void logout(UUID userId, String rawRefreshToken, HttpServletResponse response) {
+        if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
+            // Revoke only the token that was sent with this request
+            String tokenHash = hashWithSha256(rawRefreshToken);
+            refreshTokenRepository.revokeByTokenHash(tokenHash);
+            log.info("Single session revoked for userId={}", userId);
+        } else {
+            // Fallback — if no token in cookie (e.g. mobile header flow), revoke all
+            refreshTokenRepository.revokeAllByUserId(userId);
+            log.info("No token found — all sessions revoked as fallback for userId={}", userId);
+        }
+        clearRefreshTokenCookie(response);
+    }
+
+    // ── Logout all sessions ───────────────────────────────────────
+    @Transactional
+    public void logoutAll(UUID userId, HttpServletResponse response) {
         refreshTokenRepository.revokeAllByUserId(userId);
         clearRefreshTokenCookie(response);
-        log.info("User logged out, all tokens revoked: {}", userId);
+        log.info("All sessions revoked for userId={}", userId);
     }
 
     // ──────────────────────────────────────────────────────────

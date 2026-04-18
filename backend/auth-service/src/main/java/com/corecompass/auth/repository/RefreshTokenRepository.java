@@ -22,4 +22,8 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
     @Modifying
     @Query("DELETE FROM RefreshTokenEntity r WHERE r.expiresAt < :cutoff OR r.revoked = true")
     void deleteExpiredAndRevoked(Instant cutoff);
+
+    @Modifying
+    @Query("UPDATE RefreshTokenEntity r SET r.revoked = true WHERE r.tokenHash = :tokenHash")
+    void revokeByTokenHash(@org.springframework.data.repository.query.Param("tokenHash") String tokenHash);
 }
