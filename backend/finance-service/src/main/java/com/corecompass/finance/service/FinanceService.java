@@ -26,8 +26,9 @@ public class FinanceService {
     private final DebtRepository            debtRepo;
     private final InvestmentRepository      investmentRepo;
     private final InvestmentTypeRepository  investmentTypeRepo;
-    private final ExpenseCategoryRepository categoryRepo;
-    private final PaymentMethodRepository   paymentMethodRepo;
+    private final ExpenseCategoryRepository    categoryRepo;
+    private final PaymentMethodRepository      paymentMethodRepo;
+    private final RecurringExpenseRepository   recurringExpenseRepo;
 
     // ─── EXPENSE CATEGORIES ───────────────────────────────────
     public List<ExpenseCategoryDTO> listCategories(UUID userId) {
@@ -106,6 +107,60 @@ public class FinanceService {
                 .orElseThrow(() -> new RuntimeException("Income not found or not owned by you"));
         e.setDeleted(true);
         incomeRepo.save(e);
+    }
+
+    // ─── RECURRING EXPENSES ───────────────────────────────────
+
+    public List<RecurringExpenseResponse> listRecurringExpenses(UUID userId) {
+        return recurringExpenseRepo
+                .findByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toRecurringResp)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public RecurringExpenseResponse createRecurringExpense(UUID userId, RecurringExpenseRequest req) {
+        RecurringExpenseEntity e = RecurringExpenseEntity.builder()
+                .userId(userId)
+                .amount(req.getAmount())
+                .categoryId(req.getCategoryId())
+                .subCategoryId(req.getSubCategoryId())
+                .paymentMethodId(req.getPaymentMethodId())
+                .merchant(req.getMerchant())
+                .note(req.getNote())
+                .frequency(req.getFrequency())
+                .dayOfPeriod(req.getDayOfPeriod())
+                .startsOn(req.getStartsOn())
+                .endsOn(req.getEndsOn())
+                .build();
+        log.info("Recurring expense created: {} {} userId={}", e.getAmount(), e.getFrequency(), userId);
+        return toRecurringResp(recurringExpenseRepo.save(e));
+    }
+
+    @Transactional
+    public RecurringExpenseResponse updateRecurringExpense(UUID userId, UUID id, RecurringExpenseRequest req) {
+        RecurringExpenseEntity e = recurringExpenseRepo.findByIdAndUserIdAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new RuntimeException("Recurring expense not found or not owned by you"));
+        e.setAmount(req.getAmount());
+        e.setCategoryId(req.getCategoryId());
+        if (req.getSubCategoryId()    != null) e.setSubCategoryId(req.getSubCategoryId());
+        if (req.getPaymentMethodId()  != null) e.setPaymentMethodId(req.getPaymentMethodId());
+        if (req.getMerchant()         != null) e.setMerchant(req.getMerchant());
+        if (req.getNote()             != null) e.setNote(req.getNote());
+        e.setFrequency(req.getFrequency());
+        if (req.getDayOfPeriod()      != null) e.setDayOfPeriod(req.getDayOfPeriod());
+        if (req.getStartsOn()         != null) e.setStartsOn(req.getStartsOn());
+        if (req.getEndsOn()           != null) e.setEndsOn(req.getEndsOn());
+        return toRecurringResp(recurringExpenseRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteRecurringExpense(UUID userId, UUID id) {
+        RecurringExpenseEntity e = recurringExpenseRepo.findByIdAndUserIdAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new RuntimeException("Recurring expense not found or not owned by you"));
+        e.setDeleted(true);
+        recurringExpenseRepo.save(e);
     }
 
     // ─── INCOME ───────────────────────────────────────────────
@@ -472,4 +527,24 @@ public class FinanceService {
             .returnsPercent(ret).purchaseDate(e.getPurchaseDate()).createdAt(e.getCreatedAt()).build();
     }
     private BigDecimal orZero(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
+
+    private RecurringExpenseResponse toRecurringResp(RecurringExpenseEntity e) {
+        ExpenseCategoryEntity cat = categoryRepo.findById(e.getCategoryId()).orElse(null);
+        String catName = cat != null ? cat.getName() : "Unknown";
+        String catIcon = cat != null ? cat.getIcon() : null;
+        String pmName  = e.getPaymentMethodId() != null
+                ? paymentMethodRepo.findById(e.getPaymentMethodId())
+                .map(PaymentMethodEntity::getName).orElse(null)
+                : null;
+        return RecurringExpenseResponse.builder()
+                .id(e.getId())
+                .amount(e.getAmount())
+                .categoryId(e.getCategoryId()).categoryName(catName).categoryIcon(catIcon)
+                .paymentMethodId(e.getPaymentMethodId()).paymentMethodName(pmName)
+                .merchant(e.getMerchant()).note(e.getNote())
+                .frequency(e.getFrequency()).dayOfPeriod(e.getDayOfPeriod())
+                .startsOn(e.getStartsOn()).endsOn(e.getEndsOn())
+                .isActive(e.isActive()).createdAt(e.getCreatedAt())
+                .build();
+    }
 }

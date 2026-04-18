@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
+import com.corecompass.finance.dto.RecurringExpenseRequest;
+import com.corecompass.finance.dto.RecurringExpenseResponse;
 
 @RestController @RequiredArgsConstructor
 public class FinanceController {
@@ -72,6 +74,38 @@ public class FinanceController {
     @DeleteMapping("/api/v1/finance/expenses/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteExpense(@RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
         svc.deleteExpense(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    // ── RECURRING EXPENSES ────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/finance/expenses/recurring")
+    public ResponseEntity<ApiResponse<List<RecurringExpenseResponse>>> listRecurring(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listRecurringExpenses(uid), null));
+    }
+
+    @PostMapping("/api/v1/finance/expenses/recurring")
+    public ResponseEntity<ApiResponse<RecurringExpenseResponse>> createRecurring(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody RecurringExpenseRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createRecurringExpense(uid, req), "Recurring expense created"));
+    }
+
+    @PutMapping("/api/v1/finance/expenses/recurring/{id}")
+    public ResponseEntity<ApiResponse<RecurringExpenseResponse>> updateRecurring(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody RecurringExpenseRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateRecurringExpense(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/finance/expenses/recurring/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteRecurring(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteRecurringExpense(uid, id);
         return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
     }
 
