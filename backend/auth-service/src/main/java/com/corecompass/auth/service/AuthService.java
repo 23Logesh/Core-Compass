@@ -21,13 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Instant;
 
-import java.time.Instant;
 import java.util.UUID;
 
 import com.corecompass.auth.dto.PasswordResetDtos.*;
 import com.corecompass.auth.entity.PasswordResetTokenEntity;
-import com.corecompass.auth.repository.PasswordResetTokenRepository;
-import org.springframework.mail.javamail.JavaMailSender;
 
 @Slf4j
 @Service
