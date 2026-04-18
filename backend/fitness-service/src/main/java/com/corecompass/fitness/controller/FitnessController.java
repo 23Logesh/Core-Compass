@@ -307,4 +307,56 @@ public class FitnessController {
         svc.deleteExercise(uid, id);
         return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
     }
+
+    // ── WORKOUT PLANS ─────────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/plans")
+    public ResponseEntity<ApiResponse<List<WorkoutPlanResponse>>> listPlans(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listPlans(uid), null));
+    }
+
+    @GetMapping("/api/v1/fitness/plans/active")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> getActivePlan(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getActivePlan(uid), null));
+    }
+
+    @GetMapping("/api/v1/fitness/plans/{id}")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> getPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getPlan(uid, id), null));
+    }
+
+    @PostMapping("/api/v1/fitness/plans")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> createPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody WorkoutPlanRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createPlan(uid, req), "Plan created"));
+    }
+
+    @PutMapping("/api/v1/fitness/plans/{id}")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> updatePlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody WorkoutPlanRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updatePlan(uid, id, req), "Plan updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/plans/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deletePlan(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Plan deleted"));
+    }
+
+    @PostMapping("/api/v1/fitness/plans/{id}/activate")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> activatePlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.activatePlan(uid, id), "Plan activated"));
+    }
 }

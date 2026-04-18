@@ -33,7 +33,9 @@ public class FitnessService {
     private final HydrationRepository  hydrationRepo;
     private final WorkoutExerciseRepository workoutExerciseRepo;
     private final FitnessTargetRepository targetRepo;
-    private final ExerciseRepository      exerciseRepo;
+    private final ExerciseRepository           exerciseRepo;
+    private final WorkoutPlanRepository        planRepo;
+    private final WorkoutPlanExerciseRepository planExerciseRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -515,6 +517,83 @@ public class FitnessService {
         }).sorted(Comparator.comparing(WorkoutPRResponse::getExerciseName)).collect(Collectors.toList());
     }
 
+
+    // ── WORKOUT PLANS ────────────────────────────────────────────
+
+    public List<WorkoutPlanResponse> listPlans(UUID userId) {
+        return planRepo.findByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
+                .stream().map(p -> toPlanResponse(p, loadPlanExercises(p.getId())))
+                .collect(Collectors.toList());
+    }
+
+    public WorkoutPlanResponse getPlan(UUID userId, UUID planId) {
+        WorkoutPlanEntity p = planRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
+        return toPlanResponse(p, loadPlanExercises(planId));
+    }
+
+    @Transactional
+    public WorkoutPlanResponse createPlan(UUID userId, WorkoutPlanRequest req) {
+        WorkoutPlanEntity plan = WorkoutPlanEntity.builder()
+                .userId(userId)
+                .name(req.getName().trim())
+                .description(req.getDescription())
+                .difficulty(req.getDifficulty() != null ? req.getDifficulty().toUpperCase() : "BEGINNER")
+                .daysPerWeek(req.getDaysPerWeek() != null ? req.getDaysPerWeek() : 3)
+                .build();
+        plan = planRepo.save(plan);
+        List<WorkoutPlanExerciseResponse> exercises = persistPlanExercises(plan.getId(), req.getExercises());
+        log.info("Workout plan created: {} userId={}", plan.getName(), userId);
+        return toPlanResponse(plan, exercises);
+    }
+
+    @Transactional
+    public WorkoutPlanResponse updatePlan(UUID userId, UUID planId, WorkoutPlanRequest req) {
+        WorkoutPlanEntity plan = planRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
+        if (req.getName()        != null) plan.setName(req.getName().trim());
+        if (req.getDescription() != null) plan.setDescription(req.getDescription());
+        if (req.getDifficulty()  != null) plan.setDifficulty(req.getDifficulty().toUpperCase());
+        if (req.getDaysPerWeek() != null) plan.setDaysPerWeek(req.getDaysPerWeek());
+
+        List<WorkoutPlanExerciseResponse> exercises;
+        if (req.getExercises() != null) {
+            // Replace all exercises atomically
+            planExerciseRepo.deleteByPlanId(planId);
+            exercises = persistPlanExercises(planId, req.getExercises());
+        } else {
+            exercises = loadPlanExercises(planId);
+        }
+        return toPlanResponse(planRepo.save(plan), exercises);
+    }
+
+    @Transactional
+    public void deletePlan(UUID userId, UUID planId) {
+        WorkoutPlanEntity plan = planRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
+        plan.setDeleted(true);
+        plan.setActive(false);
+        planRepo.save(plan);
+    }
+
+    @Transactional
+    public WorkoutPlanResponse activatePlan(UUID userId, UUID planId) {
+        WorkoutPlanEntity plan = planRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
+        // Deactivate any currently active plan first
+        planRepo.deactivateAllForUser(userId);
+        plan.setActive(true);
+        log.info("Workout plan activated: {} userId={}", plan.getName(), userId);
+        return toPlanResponse(planRepo.save(plan), loadPlanExercises(planId));
+    }
+
+    public WorkoutPlanResponse getActivePlan(UUID userId) {
+        return planRepo.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(p -> toPlanResponse(p, loadPlanExercises(p.getId())))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "No active plan found"));
+    }
+
     // ── EXERCISE LIBRARY ────────────────────────────────────────
 
     public List<ExerciseResponse> listExercises(UUID userId,
@@ -677,4 +756,60 @@ public class FitnessService {
                 .createdAt(e.getCreatedAt())
                 .build();
     }
+
+    private List<WorkoutPlanExerciseResponse> persistPlanExercises(
+            UUID planId, List<WorkoutPlanExerciseRequest> requests) {
+        if (requests == null || requests.isEmpty()) return Collections.emptyList();
+        List<WorkoutPlanExerciseEntity> entities = requests.stream()
+                .map(r -> WorkoutPlanExerciseEntity.builder()
+                        .planId(planId)
+                        .dayNumber(r.getDayNumber())
+                        .exerciseName(r.getExerciseName().trim())
+                        .exerciseId(r.getExerciseId())
+                        .sets(r.getSets() != null ? r.getSets() : 3)
+                        .targetReps(r.getTargetReps())
+                        .targetWeightKg(r.getTargetWeightKg())
+                        .notes(r.getNotes())
+                        .sortOrder(r.getSortOrder() != null ? r.getSortOrder() : 0)
+                        .build())
+                .collect(Collectors.toList());
+        return planExerciseRepo.saveAll(entities).stream()
+                .map(this::toPlanExerciseResponse)
+                .collect(Collectors.toList());
+    }
+
+    private List<WorkoutPlanExerciseResponse> loadPlanExercises(UUID planId) {
+        return planExerciseRepo.findByPlanIdOrderByDayNumberAscSortOrderAsc(planId)
+                .stream().map(this::toPlanExerciseResponse).collect(Collectors.toList());
+    }
+
+    private WorkoutPlanExerciseResponse toPlanExerciseResponse(WorkoutPlanExerciseEntity e) {
+        return WorkoutPlanExerciseResponse.builder()
+                .id(e.getId())
+                .dayNumber(e.getDayNumber())
+                .exerciseName(e.getExerciseName())
+                .exerciseId(e.getExerciseId())
+                .sets(e.getSets())
+                .targetReps(e.getTargetReps())
+                .targetWeightKg(e.getTargetWeightKg())
+                .notes(e.getNotes())
+                .sortOrder(e.getSortOrder())
+                .build();
+    }
+
+    private WorkoutPlanResponse toPlanResponse(WorkoutPlanEntity e,
+                                               List<WorkoutPlanExerciseResponse> exercises) {
+        return WorkoutPlanResponse.builder()
+                .id(e.getId())
+                .name(e.getName())
+                .description(e.getDescription())
+                .difficulty(e.getDifficulty())
+                .daysPerWeek(e.getDaysPerWeek())
+                .isActive(e.isActive())
+                .exercises(exercises)
+                .createdAt(e.getCreatedAt())
+                .updatedAt(e.getUpdatedAt())
+                .build();
+    }
+
 }
