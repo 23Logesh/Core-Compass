@@ -118,4 +118,68 @@ public class DashboardService {
             .heatmap(heatmap)
             .build();
     }
+
+    /**
+     * Lightweight today-snapshot for mobile home screen.
+     * Avoids heavy Feign calls — only habit score is fetched remotely.
+     */
+    public DashboardTodayResponse getTodaySnapshot(UUID userId) {
+        LocalDate today = LocalDate.now();
+
+        // ── Active goal count ────────────────────────────
+        long activeGoals = goalRepository
+                .countByUserIdAndStatusAndIsDeletedFalse(userId, "ACTIVE");
+
+        // ── Today's todos ────────────────────────────────
+        List<TodoResponse> allTodaysTodos = todoRepository
+                .findTodaysTodos(userId, today)
+                .stream()
+                .map(t -> TodoResponse.builder()
+                        .id(t.getId())
+                        .goalId(t.getGoalId())
+                        .title(t.getTitle())
+                        .dueTime(t.getDueTime() != null ? t.getDueTime().toString() : null)
+                        .completed(t.isCompleted())
+                        .completedAt(t.getCompletedAt())
+                        .build())
+                .collect(Collectors.toList());
+
+        List<TodoResponse> pendingTodos = allTodaysTodos.stream()
+                .filter(t -> !t.isCompleted())
+                .collect(Collectors.toList());
+
+        long completedToday = allTodaysTodos.stream().filter(TodoResponse::isCompleted).count();
+
+        // ── Top 3 goals by progress ──────────────────────
+        List<GoalResponse> topGoals = goalRepository
+                .findTopGoalsByProgress(userId, PageRequest.of(0, 3))
+                .stream()
+                .map(goalService::toGoalResponse)
+                .collect(Collectors.toList());
+
+        BigDecimal avgProgress = topGoals.isEmpty() ? BigDecimal.ZERO :
+                topGoals.stream()
+                        .map(GoalResponse::getProgressPct)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(BigDecimal.valueOf(topGoals.size()), 2, java.math.RoundingMode.HALF_UP);
+
+        // ── Habit score (single lightweight Feign call) ──
+        int habitScore;
+        try { habitScore = habitsClient.getHabitScore(userId); }
+        catch (Exception e) {
+            log.warn("habits-service Feign failed for userId={}: {}", userId, e.getMessage());
+            habitScore = 0;
+        }
+
+        return DashboardTodayResponse.builder()
+                .activeGoals((int) activeGoals)
+                .avgGoalProgress(avgProgress)
+                .topGoals(topGoals)
+                .totalTodosToday(allTodaysTodos.size())
+                .completedTodosToday((int) completedToday)
+                .pendingTodosToday(pendingTodos.size())
+                .pendingTodos(pendingTodos)
+                .habitScore(habitScore)
+                .build();
+    }
 }

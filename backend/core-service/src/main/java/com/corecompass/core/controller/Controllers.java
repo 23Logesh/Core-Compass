@@ -238,6 +238,13 @@ class DashboardController {
         return ResponseEntity.ok(ApiResponse.ok(
             dashboardService.getDashboard(userId), null));
     }
+
+    @GetMapping("/today")
+    public ResponseEntity<ApiResponse<DashboardTodayResponse>> getTodaySnapshot(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                dashboardService.getTodaySnapshot(userId), null));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
