@@ -628,6 +628,63 @@ public class FinanceService {
                 });
     }
 
+    /**
+     * GET /finance/cash-flow?months=6
+     * Returns monthly income vs expenses for the last N months.
+     */
+    public CashFlowResponse getCashFlow(UUID userId, int months) {
+        LocalDate from = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
+
+        // Raw monthly data from DB
+        List<Object[]> expenseRows = expenseRepo.sumByMonth(userId, from);
+        List<Object[]> incomeRows  = incomeRepo.sumByMonth(userId, from);
+
+        // Build lookup maps: "YYYY-MM" → amount
+        Map<String, BigDecimal> expMap = new java.util.LinkedHashMap<>();
+        Map<String, BigDecimal> incMap = new java.util.LinkedHashMap<>();
+        expenseRows.forEach(r -> expMap.put((String) r[0], new BigDecimal(r[1].toString())));
+        incomeRows.forEach(r  -> incMap.put((String) r[0], new BigDecimal(r[1].toString())));
+
+        // Generate all months in range (fill zero for missing months)
+        List<CashFlowResponse.MonthlyFlow> monthlyFlows = new java.util.ArrayList<>();
+        java.time.YearMonth cursor = java.time.YearMonth.from(from);
+        java.time.YearMonth now    = java.time.YearMonth.now();
+
+        while (!cursor.isAfter(now)) {
+            String key      = cursor.toString();
+            BigDecimal inc  = incMap.getOrDefault(key, BigDecimal.ZERO);
+            BigDecimal exp  = expMap.getOrDefault(key, BigDecimal.ZERO);
+            BigDecimal net  = inc.subtract(exp);
+            String status   = net.compareTo(BigDecimal.ZERO) > 0 ? "SURPLUS"
+                    : net.compareTo(BigDecimal.ZERO) < 0 ? "DEFICIT"
+                    : "BREAK_EVEN";
+            monthlyFlows.add(CashFlowResponse.MonthlyFlow.builder()
+                    .month(key).income(inc).expenses(exp).net(net).status(status).build());
+            cursor = cursor.plusMonths(1);
+        }
+
+        BigDecimal totalInc = monthlyFlows.stream()
+                .map(CashFlowResponse.MonthlyFlow::getIncome)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalExp = monthlyFlows.stream()
+                .map(CashFlowResponse.MonthlyFlow::getExpenses)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        int count = monthlyFlows.size();
+
+        return CashFlowResponse.builder()
+                .months(monthlyFlows)
+                .totalIncome(totalInc)
+                .totalExpenses(totalExp)
+                .netCashFlow(totalInc.subtract(totalExp))
+                .avgMonthlyIncome(count > 0
+                        ? totalInc.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO)
+                .avgMonthlyExpenses(count > 0
+                        ? totalExp.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO)
+                .build();
+    }
+
     private BigDecimal orZero(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
 
     private RecurringExpenseResponse toRecurringResp(RecurringExpenseEntity e) {

@@ -17,4 +17,7 @@ public interface MilestoneRepository extends JpaRepository<MilestoneEntity, UUID
     List<MilestoneEntity> findByGoalIdOrderByTargetDateAsc(UUID goalId);
 
     Optional<MilestoneEntity> findByIdAndUserId(UUID id, UUID userId);
+
+    // Completed milestones for timeline
+    List<MilestoneEntity> findByGoalIdAndCompletedTrueOrderByCompletedAtDesc(UUID goalId);
 }

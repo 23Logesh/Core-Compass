@@ -318,6 +318,61 @@ public class GoalService {
             .build();
     }
 
+    public List<GoalTimelineEvent> getGoalTimeline(UUID userId, UUID goalId) {
+        // Validate ownership
+        GoalEntity goal = goalRepository.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new GoalNotFoundException("Goal not found"));
+
+        List<GoalTimelineEvent> events = new java.util.ArrayList<>();
+
+        // 1. Goal created event
+        events.add(GoalTimelineEvent.builder()
+                .id(goal.getId())
+                .eventType("GOAL_CREATED")
+                .title("Goal started: " + goal.getTitle())
+                .occurredAt(goal.getCreatedAt())
+                .build());
+
+        // 2. Completed todos
+        todoRepository.findCompletedByGoalId(goalId, userId).forEach(t ->
+                events.add(GoalTimelineEvent.builder()
+                        .id(t.getId())
+                        .eventType("TODO_COMPLETED")
+                        .title(t.getTitle())
+                        .occurredAt(t.getCompletedAt())
+                        .build()));
+
+        // 3. Completed milestones
+        milestoneRepository.findByGoalIdAndCompletedTrueOrderByCompletedAtDesc(goalId).forEach(m ->
+                events.add(GoalTimelineEvent.builder()
+                        .id(m.getId())
+                        .eventType("MILESTONE_COMPLETED")
+                        .title(m.getTitle())
+                        .occurredAt(m.getCompletedAt())
+                        .build()));
+
+        // 4. Logged activities (latest 20 to keep the timeline readable)
+        activityRepository.findByGoalIdAndUserId(goalId, userId,
+                        org.springframework.data.domain.PageRequest.of(0, 20))
+                .forEach(a -> {
+                    ActivityTypeEntity type = activityTypeRepository
+                            .findById(a.getActivityTypeId()).orElse(null);
+                    events.add(GoalTimelineEvent.builder()
+                            .id(a.getId())
+                            .eventType("ACTIVITY_LOGGED")
+                            .title(type != null ? type.getName() + " logged" : "Activity logged")
+                            .occurredAt(a.getLoggedAt())
+                            .build());
+                });
+
+        // Sort all events newest first — nulls (e.g. todo without completedAt) go to end
+        events.sort(java.util.Comparator.comparing(
+                GoalTimelineEvent::getOccurredAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+
+        return events;
+    }
+
     // ─────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────

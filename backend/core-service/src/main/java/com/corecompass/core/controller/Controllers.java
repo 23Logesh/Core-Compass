@@ -133,6 +133,14 @@ class GoalController {
             @RequestHeader("X-User-Id") UUID userId) {
         return ResponseEntity.ok(ApiResponse.ok(goalService.getHeatmap(userId), null));
     }
+
+    @GetMapping("/{goalId}/timeline")
+    public ResponseEntity<ApiResponse<List<GoalTimelineEvent>>> getTimeline(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID goalId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                goalService.getGoalTimeline(userId, goalId), null));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

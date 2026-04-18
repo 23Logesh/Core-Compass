@@ -48,4 +48,14 @@ public interface ExpenseRepository extends JpaRepository<ExpenseEntity, UUID> {
             "FROM finance_schema.expenses WHERE user_id=:u AND is_deleted=false " +
             "AND expense_date >= :from GROUP BY month ORDER BY month", nativeQuery = true)
     List<Object[]> getMonthlyTrend(@Param("u") UUID u, @Param("from") LocalDate from);
+
+    // Monthly expense totals for cash flow — native query for date_trunc grouping
+    @Query(value = "SELECT TO_CHAR(expense_date,'YYYY-MM') as month, " +
+            "COALESCE(SUM(amount),0) as total " +
+            "FROM finance_schema.expenses " +
+            "WHERE user_id = :u AND is_deleted = false " +
+            "AND expense_date >= :from " +
+            "GROUP BY month ORDER BY month ASC",
+            nativeQuery = true)
+    List<Object[]> sumByMonth(@Param("u") UUID u, @Param("from") LocalDate from);
 }

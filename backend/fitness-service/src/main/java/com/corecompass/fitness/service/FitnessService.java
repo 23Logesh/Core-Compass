@@ -42,6 +42,10 @@ public class FitnessService {
     private final SupplementTypeRepository     supplementTypeRepo;
     private final SupplementLogRepository      supplementLogRepo;
     private final SupplementScheduleRepository supplementScheduleRepo;
+    private final CardioTypeRepository  cardioTypeRepo;
+    private final WorkoutTypeRepository workoutTypeRepo;
+    private final MetricTypeRepository  metricTypeRepo;
+    private final MealTypeRepository    mealTypeRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -598,6 +602,191 @@ public class FitnessService {
                 .map(p -> toPlanResponse(p, loadPlanExercises(p.getId())))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "No active plan found"));
+    }
+
+    // ── FITNESS TYPE REGISTRY ─────────────────────────────────────
+//    Shared helper — avoids duplicating 4×3 identical CRUD blocks
+
+    private <T> List<FitnessTypeResponse> listTypes(
+            java.util.function.Function<UUID, List<T>> finder,
+            java.util.function.Function<T, FitnessTypeResponse> mapper,
+            UUID userId) {
+        return finder.apply(userId).stream().map(mapper).collect(Collectors.toList());
+    }
+
+// ── CARDIO TYPES ──────────────────────────────────────────────
+
+    public List<FitnessTypeResponse> listCardioTypes(UUID userId) {
+        return cardioTypeRepo.findAvailableForUser(userId)
+                .stream().map(t -> FitnessTypeResponse.builder()
+                        .id(t.getId()).name(t.getName()).icon(t.getIcon())
+                        .color(t.getColor()).isSystem(t.isSystem()).build())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public FitnessTypeResponse createCardioType(UUID userId, FitnessTypeRequest req) {
+        if (cardioTypeRepo.existsByNameAndCreatedBy(req.getName(), userId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cardio type '" + req.getName() + "' already exists");
+        CardioTypeEntity e = CardioTypeEntity.builder()
+                .name(req.getName().trim()).icon(req.getIcon())
+                .color(req.getColor()).isSystem(false).createdBy(userId).build();
+        CardioTypeEntity saved = cardioTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).color(saved.getColor()).isSystem(false).build();
+    }
+
+    @Transactional
+    public FitnessTypeResponse updateCardioType(UUID userId, UUID id, FitnessTypeRequest req) {
+        CardioTypeEntity e = cardioTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Cardio type not found or not yours to edit"));
+        if (req.getName()  != null) e.setName(req.getName().trim());
+        if (req.getIcon()  != null) e.setIcon(req.getIcon());
+        if (req.getColor() != null) e.setColor(req.getColor());
+        CardioTypeEntity saved = cardioTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).color(saved.getColor()).isSystem(false).build();
+    }
+
+    @Transactional
+    public void deleteCardioType(UUID userId, UUID id) {
+        CardioTypeEntity e = cardioTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Cardio type not found or not yours to delete"));
+        cardioTypeRepo.delete(e);
+    }
+
+// ── WORKOUT TYPES ─────────────────────────────────────────────
+
+    public List<FitnessTypeResponse> listWorkoutTypes(UUID userId) {
+        return workoutTypeRepo.findAvailableForUser(userId)
+                .stream().map(t -> FitnessTypeResponse.builder()
+                        .id(t.getId()).name(t.getName()).icon(t.getIcon())
+                        .color(t.getColor()).isSystem(t.isSystem()).build())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public FitnessTypeResponse createWorkoutType(UUID userId, FitnessTypeRequest req) {
+        if (workoutTypeRepo.existsByNameAndCreatedBy(req.getName(), userId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Workout type '" + req.getName() + "' already exists");
+        WorkoutTypeEntity e = WorkoutTypeEntity.builder()
+                .name(req.getName().trim()).icon(req.getIcon())
+                .color(req.getColor()).isSystem(false).createdBy(userId).build();
+        WorkoutTypeEntity saved = workoutTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).color(saved.getColor()).isSystem(false).build();
+    }
+
+    @Transactional
+    public FitnessTypeResponse updateWorkoutType(UUID userId, UUID id, FitnessTypeRequest req) {
+        WorkoutTypeEntity e = workoutTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Workout type not found or not yours to edit"));
+        if (req.getName()  != null) e.setName(req.getName().trim());
+        if (req.getIcon()  != null) e.setIcon(req.getIcon());
+        if (req.getColor() != null) e.setColor(req.getColor());
+        WorkoutTypeEntity saved = workoutTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).color(saved.getColor()).isSystem(false).build();
+    }
+
+    @Transactional
+    public void deleteWorkoutType(UUID userId, UUID id) {
+        WorkoutTypeEntity e = workoutTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Workout type not found or not yours to delete"));
+        workoutTypeRepo.delete(e);
+    }
+
+// ── METRIC TYPES ──────────────────────────────────────────────
+
+    public List<FitnessTypeResponse> listMetricTypes(UUID userId) {
+        return metricTypeRepo.findAvailableForUser(userId)
+                .stream().map(t -> FitnessTypeResponse.builder()
+                        .id(t.getId()).name(t.getName()).icon(t.getIcon())
+                        .unit(t.getUnit()).isSystem(t.isSystem()).build())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public FitnessTypeResponse createMetricType(UUID userId, FitnessTypeRequest req) {
+        if (metricTypeRepo.existsByNameAndCreatedBy(req.getName(), userId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Metric type '" + req.getName() + "' already exists");
+        MetricTypeEntity e = MetricTypeEntity.builder()
+                .name(req.getName().trim()).icon(req.getIcon())
+                .unit(req.getUnit()).isSystem(false).createdBy(userId).build();
+        MetricTypeEntity saved = metricTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).unit(saved.getUnit()).isSystem(false).build();
+    }
+
+    @Transactional
+    public FitnessTypeResponse updateMetricType(UUID userId, UUID id, FitnessTypeRequest req) {
+        MetricTypeEntity e = metricTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Metric type not found or not yours to edit"));
+        if (req.getName() != null) e.setName(req.getName().trim());
+        if (req.getIcon() != null) e.setIcon(req.getIcon());
+        if (req.getUnit() != null) e.setUnit(req.getUnit());
+        MetricTypeEntity saved = metricTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).unit(saved.getUnit()).isSystem(false).build();
+    }
+
+    @Transactional
+    public void deleteMetricType(UUID userId, UUID id) {
+        MetricTypeEntity e = metricTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Metric type not found or not yours to delete"));
+        metricTypeRepo.delete(e);
+    }
+
+// ── MEAL TYPES ────────────────────────────────────────────────
+
+    public List<FitnessTypeResponse> listMealTypes(UUID userId) {
+        return mealTypeRepo.findAvailableForUser(userId)
+                .stream().map(t -> FitnessTypeResponse.builder()
+                        .id(t.getId()).name(t.getName()).icon(t.getIcon())
+                        .isSystem(t.isSystem()).build())
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public FitnessTypeResponse createMealType(UUID userId, FitnessTypeRequest req) {
+        if (mealTypeRepo.existsByNameAndCreatedBy(req.getName(), userId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Meal type '" + req.getName() + "' already exists");
+        MealTypeEntity e = MealTypeEntity.builder()
+                .name(req.getName().trim()).icon(req.getIcon())
+                .isSystem(false).createdBy(userId).build();
+        MealTypeEntity saved = mealTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).isSystem(false).build();
+    }
+
+    @Transactional
+    public FitnessTypeResponse updateMealType(UUID userId, UUID id, FitnessTypeRequest req) {
+        MealTypeEntity e = mealTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Meal type not found or not yours to edit"));
+        if (req.getName() != null) e.setName(req.getName().trim());
+        if (req.getIcon() != null) e.setIcon(req.getIcon());
+        MealTypeEntity saved = mealTypeRepo.save(e);
+        return FitnessTypeResponse.builder().id(saved.getId()).name(saved.getName())
+                .icon(saved.getIcon()).isSystem(false).build();
+    }
+
+    @Transactional
+    public void deleteMealType(UUID userId, UUID id) {
+        MealTypeEntity e = mealTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Meal type not found or not yours to delete"));
+        mealTypeRepo.delete(e);
     }
 
     // ── SUPPLEMENT TYPES ──────────────────────────────────────────

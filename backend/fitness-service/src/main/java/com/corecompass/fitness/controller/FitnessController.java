@@ -550,4 +550,122 @@ public class FitnessController {
         svc.deleteSchedule(uid, id);
         return ResponseEntity.ok(ApiResponse.ok(null, "Schedule deactivated"));
     }
+
+    // ── FITNESS TYPE REGISTRY ──────────────────────────────────────────────
+
+    // CARDIO TYPES
+    @GetMapping("/api/v1/fitness/cardio/types")
+    public ResponseEntity<ApiResponse<List<FitnessTypeResponse>>> listCardioTypes(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listCardioTypes(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/cardio/types")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> createCardioType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createCardioType(uid, req), "Cardio type created"));
+    }
+
+    @PutMapping("/api/v1/fitness/cardio/types/{id}")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> updateCardioType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateCardioType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/cardio/types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteCardioType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteCardioType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    // WORKOUT TYPES
+    @GetMapping("/api/v1/fitness/workout/types")
+    public ResponseEntity<ApiResponse<List<FitnessTypeResponse>>> listWorkoutTypes(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listWorkoutTypes(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/workout/types")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> createWorkoutType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createWorkoutType(uid, req), "Workout type created"));
+    }
+
+    @PutMapping("/api/v1/fitness/workout/types/{id}")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> updateWorkoutType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateWorkoutType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/workout/types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteWorkoutType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteWorkoutType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    // METRIC TYPES
+    @GetMapping("/api/v1/fitness/metric-types")
+    public ResponseEntity<ApiResponse<List<FitnessTypeResponse>>> listMetricTypes(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listMetricTypes(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/metric-types")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> createMetricType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createMetricType(uid, req), "Metric type created"));
+    }
+
+    @PutMapping("/api/v1/fitness/metric-types/{id}")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> updateMetricType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateMetricType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/metric-types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteMetricType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteMetricType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    // MEAL TYPES
+    @GetMapping("/api/v1/fitness/meal-types")
+    public ResponseEntity<ApiResponse<List<FitnessTypeResponse>>> listMealTypes(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listMealTypes(uid), null));
+    }
+
+    @PostMapping("/api/v1/fitness/meal-types")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> createMealType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createMealType(uid, req), "Meal type created"));
+    }
+
+    @PutMapping("/api/v1/fitness/meal-types/{id}")
+    public ResponseEntity<ApiResponse<FitnessTypeResponse>> updateMealType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id,
+            @Valid @RequestBody FitnessTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateMealType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/meal-types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteMealType(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteMealType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
 }

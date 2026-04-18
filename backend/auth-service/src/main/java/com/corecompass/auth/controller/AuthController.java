@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Arrays;
 import java.util.UUID;
 
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+
 /**
  * Auth Controller — handles all authentication endpoints.
  *
@@ -114,6 +117,34 @@ public class AuthController {
 
         UserDTO user = authService.updateProfile(userId, request);
         return ResponseEntity.ok(ApiResponse.ok(user, "Profile updated successfully"));
+    }
+
+    /**
+     * POST /api/v1/auth/me/avatar
+     * Accepts multipart/form-data with a file field named "avatar".
+     * Converts to base64 data URL and stores in user.avatarUrl.
+     * Max size enforced by Spring (configure in application.yml: spring.servlet.multipart.max-file-size=2MB)
+     */
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserDTO>> uploadAvatar(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestParam("avatar") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("NOT_FOUND","No file provided"));
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("NOT_ALLOWED","Only image files are allowed"));
+        }
+        // 2 MB limit
+        if (file.getSize() > 2 * 1024 * 1024) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("NOT_ALLOWED","Image must be under 2 MB"));
+        }
+        UserDTO updated = authService.updateAvatar(userId, file);
+        return ResponseEntity.ok(ApiResponse.ok(updated, "Avatar updated"));
     }
 
     // ── DELETE /api/v1/auth/me ─────────────────────────────────────────────

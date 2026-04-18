@@ -217,6 +217,24 @@ public class AuthService {
         return toUserDTO(userRepository.save(user));
     }
 
+    @Transactional
+    public UserDTO updateAvatar(UUID userId, org.springframework.web.multipart.MultipartFile file) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        try {
+            byte[] bytes = file.getBytes();
+            String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
+            String dataUrl = "data:" + file.getContentType() + ";base64," + base64;
+            user.setAvatarUrl(dataUrl);
+            userRepository.save(user);
+            log.info("Avatar updated for userId={}", userId);
+            return toUserDTO(user);
+        } catch (java.io.IOException e) {
+            log.error("Avatar upload failed for userId={}: {}", userId, e.getMessage());
+            throw new RuntimeException("Failed to process avatar upload");
+        }
+    }
+
     // ──────────────────────────────────────────────────────────
     // SOFT DELETE (GDPR)
     // ──────────────────────────────────────────────────────────

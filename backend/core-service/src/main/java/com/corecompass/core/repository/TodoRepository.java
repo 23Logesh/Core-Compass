@@ -83,4 +83,10 @@ public interface TodoRepository extends JpaRepository<TodoEntity, UUID> {
     );
 
     long countByUserIdAndCompletedTrue(UUID userId);
+
+    // Completed todos for a specific goal — timeline use
+    @Query("SELECT t FROM TodoEntity t WHERE t.goalId = :goalId AND t.userId = :userId " +
+            "AND t.completed = true AND t.isDeleted = false ORDER BY t.completedAt DESC")
+    List<TodoEntity> findCompletedByGoalId(@Param("goalId") UUID goalId,
+                                           @Param("userId") UUID userId);
 }

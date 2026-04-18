@@ -292,6 +292,18 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(svc.getSpendingPatterns(uid), null));
     }
 
+    /**
+     * GET /api/v1/finance/cash-flow?months=6
+     * Monthly income vs expense breakdown for the last N months (default 6, max 24).
+     */
+    @GetMapping("/api/v1/finance/cash-flow")
+    public ResponseEntity<ApiResponse<CashFlowResponse>> getCashFlow(
+            @RequestHeader("X-User-Id") UUID uid,
+            @RequestParam(defaultValue = "6") int months) {
+        int capped = Math.min(Math.max(months, 1), 24); // clamp 1–24
+        return ResponseEntity.ok(ApiResponse.ok(svc.getCashFlow(uid, capped), null));
+    }
+
     // ── INTERNAL FEIGN ENDPOINT ──────────────────────────────
     @GetMapping("/internal/finance/summary/monthly")
     public ResponseEntity<FinanceSummaryDTO> internalMonthlySummary(@RequestParam UUID userId, @RequestParam String month) {

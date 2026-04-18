@@ -28,4 +28,14 @@ public interface IncomeRepository extends JpaRepository<IncomeEntity, UUID> {
             "WHERE i.userId=:u AND i.isDeleted=false GROUP BY i.sourceType ORDER BY COUNT(i) DESC")
     List<Object[]> findSourceSummaries(@Param("u") UUID u);
 
+    // Monthly income totals for cash flow
+    @Query(value = "SELECT TO_CHAR(income_date,'YYYY-MM') as month, " +
+            "COALESCE(SUM(amount),0) as total " +
+            "FROM finance_schema.incomes " +
+            "WHERE user_id = :u AND is_deleted = false " +
+            "AND income_date >= :from " +
+            "GROUP BY month ORDER BY month ASC",
+            nativeQuery = true)
+    List<Object[]> sumByMonth(@Param("u") UUID u, @Param("from") java.time.LocalDate from);
+
 }
