@@ -210,6 +210,65 @@ public class HabitsService {
         return toRoutineResponse(userId, routineRepo.save(e));
     }
 
+    // ── ROUTINE DELETE ─────────────────────────────────────────────
+    @Transactional
+    public void deleteRoutine(UUID userId, UUID routineId) {
+        RoutineGroupEntity e = routineRepo.findByIdAndUserId(routineId, userId)
+                .orElseThrow(() -> new RuntimeException("Routine not found"));
+        e.setDeleted(true);
+        routineRepo.save(e);
+    }
+
+    // ── CATEGORY TYPE CREATE ───────────────────────────────────────
+    @Transactional
+    public HabitCategoryTypeDTO createCategoryType(UUID userId, HabitCategoryTypeRequest req) {
+        HabitCategoryTypeEntity e = HabitCategoryTypeEntity.builder()
+                .name(req.getName().trim())
+                .icon(req.getIcon())
+                .color(req.getColor())
+                .isSystem(false)
+                .isPublic(false)
+                .createdBy(userId)
+                .build();
+        e = categoryTypeRepo.save(e);
+        return HabitCategoryTypeDTO.builder()
+                .id(e.getId()).name(e.getName())
+                .icon(e.getIcon()).color(e.getColor())
+                .isSystem(false).build();
+    }
+
+    // ── CATEGORY TYPE UPDATE ───────────────────────────────────────
+    @Transactional
+    public HabitCategoryTypeDTO updateCategoryType(UUID userId, UUID id, HabitCategoryTypeRequest req) {
+        HabitCategoryTypeEntity e = categoryTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new RuntimeException("Category type not found or not editable"));
+        if (req.getName()  != null) e.setName(req.getName().trim());
+        if (req.getIcon()  != null) e.setIcon(req.getIcon());
+        if (req.getColor() != null) e.setColor(req.getColor());
+        e = categoryTypeRepo.save(e);
+        return HabitCategoryTypeDTO.builder()
+                .id(e.getId()).name(e.getName())
+                .icon(e.getIcon()).color(e.getColor())
+                .isSystem(false).build();
+    }
+
+    // ── CATEGORY TYPE DELETE ───────────────────────────────────────
+    @Transactional
+    public void deleteCategoryType(UUID userId, UUID id) {
+        HabitCategoryTypeEntity e = categoryTypeRepo.findByIdAndCreatedBy(id, userId)
+                .orElseThrow(() -> new RuntimeException("Category type not found or not yours to delete"));
+        categoryTypeRepo.delete(e);
+    }
+
+    // ── HABIT ARCHIVE ──────────────────────────────────────────────
+    @Transactional
+    public HabitResponse archiveHabit(UUID userId, UUID habitId) {
+        HabitEntity e = habitRepo.findByIdAndUserIdAndIsDeletedFalse(habitId, userId)
+                .orElseThrow(() -> new RuntimeException("Habit not found"));
+        e.setStatus("ARCHIVED");
+        return toResponse(habitRepo.save(e), null);
+    }
+
     // ── PRIVATE HELPERS ──────────────────────────────────────
     private void updateStreak(HabitEntity habit, LocalDate date) {
         List<HabitCheckinEntity> history = checkinRepo.findByHabitIdOrderByCheckinDateDesc(habit.getId());

@@ -18,6 +18,30 @@ public class HabitsController {
         return ResponseEntity.ok(ApiResponse.ok(svc.listCategoryTypes(uid), null));
     }
 
+    @PostMapping("/api/v1/habits/category-types")
+    public ResponseEntity<ApiResponse<HabitCategoryTypeDTO>> createCategoryType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody HabitCategoryTypeRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createCategoryType(uid, req), "Category type created"));
+    }
+
+    @PutMapping("/api/v1/habits/category-types/{id}")
+    public ResponseEntity<ApiResponse<HabitCategoryTypeDTO>> updateCategoryType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody HabitCategoryTypeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateCategoryType(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/habits/category-types/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteCategoryType(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteCategoryType(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
     // ── HABITS CRUD ───────────────────────────────────────
     @GetMapping("/api/v1/habits")
     public ResponseEntity<ApiResponse<List<HabitResponse>>> listHabits(@RequestHeader("X-User-Id") UUID uid) {
@@ -64,6 +88,13 @@ public class HabitsController {
     public ResponseEntity<ApiResponse<HabitResponse>> resume(
             @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID habitId) {
         return ResponseEntity.ok(ApiResponse.ok(svc.resumeHabit(uid, habitId), "Resumed"));
+    }
+
+    @PatchMapping("/api/v1/habits/{habitId}/archive")
+    public ResponseEntity<ApiResponse<HabitResponse>> archiveHabit(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID habitId) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.archiveHabit(uid, habitId), "Archived"));
     }
 
     // ── CHECK-INS ─────────────────────────────────────────
@@ -139,6 +170,14 @@ public class HabitsController {
             @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID routineId,
             @Valid @RequestBody RoutineGroupRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(svc.updateRoutine(uid, routineId, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/routines/{routineId}")
+    public ResponseEntity<ApiResponse<Void>> deleteRoutine(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID routineId) {
+        svc.deleteRoutine(uid, routineId);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Routine deleted"));
     }
 
     // ── INTERNAL FEIGN ────────────────────────────────────
