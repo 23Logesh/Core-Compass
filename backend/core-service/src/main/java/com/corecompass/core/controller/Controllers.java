@@ -1,6 +1,7 @@
 package com.corecompass.core.controller;
 
 import com.corecompass.core.dto.*;
+import com.corecompass.core.service.AchievementService;
 import com.corecompass.core.service.DashboardService;
 import com.corecompass.core.service.GoalService;
 import jakarta.validation.Valid;
@@ -415,3 +416,34 @@ class NotificationController {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+// ACHIEVEMENT CONTROLLER — /api/v1/achievements
+// ═══════════════════════════════════════════════════════════════
+@RestController
+@RequestMapping("/api/v1/achievements")
+@RequiredArgsConstructor
+class AchievementController {
+
+    private final AchievementService achievementService;
+
+    /** GET /api/v1/achievements — all achievement definitions */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<AchievementDTO.Definition>>> listAll(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(achievementService.listAll(), null));
+    }
+
+    /** GET /api/v1/achievements/earned — badges this user has earned */
+    @GetMapping("/earned")
+    public ResponseEntity<ApiResponse<List<AchievementDTO.Earned>>> getEarned(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(achievementService.getEarned(userId), null));
+    }
+
+    /** GET /api/v1/achievements/progress — unearned achievements with progress % */
+    @GetMapping("/progress")
+    public ResponseEntity<ApiResponse<List<AchievementDTO.Progress>>> getProgress(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(achievementService.getProgress(userId), null));
+    }
+}

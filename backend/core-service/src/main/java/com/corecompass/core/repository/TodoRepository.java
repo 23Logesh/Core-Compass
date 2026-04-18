@@ -81,4 +81,6 @@ public interface TodoRepository extends JpaRepository<TodoEntity, UUID> {
             @Param("title") String title,
             @Param("dueDate") LocalDate dueDate
     );
+
+    long countByUserIdAndCompletedTrue(UUID userId);
 }
