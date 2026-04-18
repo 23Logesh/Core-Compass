@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.corecompass.core.service.NotificationService;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -355,5 +357,61 @@ class InternalCoreController {
             return ResponseEntity.ok(ApiResponse.ok(null, "Activity deleted"));
         }
     }
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATION CONTROLLER — /api/v1/notifications
+// ═══════════════════════════════════════════════════════════════
+@RestController
+@RequestMapping("/api/v1/notifications")
+@RequiredArgsConstructor
+class NotificationController {
+
+    private final NotificationService notificationService;
+
+    /** GET /api/v1/notifications — paginated, unread first */
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> list(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.listNotifications(
+                        userId, PageRequest.of(page, size)), null));
+    }
+
+    /** PATCH /api/v1/notifications/{id}/read — mark one as read */
+    @PatchMapping("/{id}/read")
+    public ResponseEntity<ApiResponse<NotificationResponse>> markRead(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.markRead(userId, id), "Marked as read"));
+    }
+
+    /** PATCH /api/v1/notifications/read-all — mark all as read */
+    @PatchMapping("/read-all")
+    public ResponseEntity<ApiResponse<Void>> markAllRead(
+            @RequestHeader("X-User-Id") UUID userId) {
+        int count = notificationService.markAllRead(userId);
+        return ResponseEntity.ok(ApiResponse.ok(null, count + " notifications marked as read"));
+    }
+
+    /** GET /api/v1/notifications/preferences */
+    @GetMapping("/preferences")
+    public ResponseEntity<ApiResponse<UserPreferencesResponse>> getPreferences(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.getPreferences(userId), null));
+    }
+
+    /** PUT /api/v1/notifications/preferences */
+    @PutMapping("/preferences")
+    public ResponseEntity<ApiResponse<UserPreferencesResponse>> updatePreferences(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody UserPreferencesRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.updatePreferences(userId, req), "Preferences updated"));
+    }
+}
 
 
