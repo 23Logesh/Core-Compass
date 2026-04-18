@@ -29,6 +29,7 @@ public class FinanceService {
     private final ExpenseCategoryRepository    categoryRepo;
     private final PaymentMethodRepository      paymentMethodRepo;
     private final RecurringExpenseRepository   recurringExpenseRepo;
+    private final com.corecompass.finance.client.NotificationClient notificationClient;
 
     // ─── EXPENSE CATEGORIES ───────────────────────────────────
     public List<ExpenseCategoryDTO> listCategories(UUID userId) {
@@ -54,13 +55,19 @@ public class FinanceService {
     @Transactional
     public ExpenseResponse addExpense(UUID userId, ExpenseRequest req) {
         ExpenseEntity e = ExpenseEntity.builder()
-            .userId(userId).amount(req.getAmount()).categoryId(req.getCategoryId())
-            .subCategoryId(req.getSubCategoryId()).paymentMethodId(req.getPaymentMethodId())
-            .expenseDate(req.getDate() != null ? req.getDate() : LocalDate.now())
-            .merchant(req.getMerchant()).note(req.getNote())
-            .tags(req.getTags()).isRecurring(req.isRecurring()).build();
+                .userId(userId).amount(req.getAmount()).categoryId(req.getCategoryId())
+                .subCategoryId(req.getSubCategoryId()).paymentMethodId(req.getPaymentMethodId())
+                .expenseDate(req.getDate() != null ? req.getDate() : LocalDate.now())
+                .merchant(req.getMerchant()).note(req.getNote())
+                .tags(req.getTags()).isRecurring(req.isRecurring()).build();
+
+        ExpenseResponse saved = toExpenseResp(expenseRepo.save(e));
         log.info("Expense added: {} userId={}", e.getAmount(), userId);
-        return toExpenseResp(expenseRepo.save(e));
+
+        // Check budget alert after saving — fire only on threshold crossing
+        checkBudgetAlert(userId, req.getCategoryId(), req.getAmount());
+
+        return saved;
     }
 
     @Transactional
@@ -526,6 +533,64 @@ public class FinanceService {
             .investedAmount(e.getInvestedAmount()).currentValue(e.getCurrentValue())
             .returnsPercent(ret).purchaseDate(e.getPurchaseDate()).createdAt(e.getCreatedAt()).build();
     }
+    /**
+     * Fires a budget alert only when the new expense causes the spend to
+     * CROSS a threshold (80% or 100%). Comparing before vs after prevents
+     * repeated notifications on every single expense.
+     */
+    private void checkBudgetAlert(UUID userId, UUID categoryId, BigDecimal addedAmount) {
+        if (categoryId == null || addedAmount == null) return;
+
+        String month = YearMonth.now().toString();
+        budgetRepo.findByUserIdAndCategoryIdAndBudgetMonth(userId, categoryId, month)
+                .ifPresent(budget -> {
+                    LocalDate from = LocalDate.parse(month + "-01");
+                    LocalDate to   = from.withDayOfMonth(from.lengthOfMonth());
+
+                    // Total spend NOW (includes the expense we just saved)
+                    BigDecimal spentNow = orZero(
+                            expenseRepo.sumByCategoryAndDateRange(userId, categoryId, from, to));
+
+                    // Spend BEFORE this expense
+                    BigDecimal spentBefore = spentNow.subtract(addedAmount);
+
+                    BigDecimal limit = budget.getAmountLimit();
+                    if (limit.compareTo(BigDecimal.ZERO) <= 0) return;
+
+                    double pctBefore = spentBefore.divide(limit, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100)).doubleValue();
+                    double pctNow    = spentNow.divide(limit, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100)).doubleValue();
+
+                    String catName = categoryRepo.findById(categoryId)
+                            .map(ExpenseCategoryEntity::getName).orElse("this category");
+
+                    // Crossed 100% — budget exceeded
+                    if (pctBefore < 100.0 && pctNow >= 100.0) {
+                        notificationClient.createNotification(
+                                userId,
+                                "BUDGET_ALERT",
+                                "🚨 Budget Exceeded: " + catName,
+                                String.format("You've spent ₹%.0f of your ₹%.0f %s budget (%.0f%%).",
+                                        spentNow, limit, catName, pctNow)
+                        );
+                        log.info("Budget exceeded alert sent: userId={} category={}", userId, catName);
+
+                        // Crossed 80% warning — only if not yet exceeded
+                    } else if (pctBefore < 80.0 && pctNow >= 80.0) {
+                        notificationClient.createNotification(
+                                userId,
+                                "BUDGET_ALERT",
+                                "⚠️ Budget Warning: " + catName,
+                                String.format("You've used %.0f%% of your ₹%.0f %s budget. ₹%.0f remaining.",
+                                        pctNow, limit, catName,
+                                        limit.subtract(spentNow).max(BigDecimal.ZERO))
+                        );
+                        log.info("Budget 80%% warning sent: userId={} category={}", userId, catName);
+                    }
+                });
+    }
+
     private BigDecimal orZero(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
 
     private RecurringExpenseResponse toRecurringResp(RecurringExpenseEntity e) {

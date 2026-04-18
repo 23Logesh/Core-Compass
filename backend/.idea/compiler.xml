@@ -22,8 +22,8 @@
           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct/1.5.5.Final/mapstruct-1.5.5.Final.jar" />
         </processorPath>
         <module name="auth-service" />
-        <module name="finance-service" />
         <module name="fitness-service" />
+        <module name="finance-service" />
         <module name="api-gateway" />
         <module name="habits-service" />
         <module name="eureka-server" />
