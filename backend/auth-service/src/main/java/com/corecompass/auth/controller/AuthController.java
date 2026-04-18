@@ -84,7 +84,7 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader("X-User-Id") UUID userId,
-            @CookieValue(name = "refresh_token", required = false) String rawRefreshToken,
+            @CookieValue(name = "refreshToken", required = false) String rawRefreshToken,
             HttpServletResponse response) {
         authService.logout(userId, rawRefreshToken, response);
         return ResponseEntity.ok(ApiResponse.ok(null, "Logged out from this device"));
