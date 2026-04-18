@@ -39,7 +39,7 @@ public class NotificationEntity {
     private boolean isRead = false;
 
     // Optional extra data (e.g. goalId, habitId) stored as JSON string
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "jsonb")
     private String metadata;
 
     @Column(name = "created_at", nullable = false, updatable = false)
