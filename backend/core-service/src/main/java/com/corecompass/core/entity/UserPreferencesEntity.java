@@ -46,6 +46,11 @@ public class UserPreferencesEntity {
     @Builder.Default
     private boolean habitReminders = true;
 
+    // User-configurable dashboard widget layout stored as JSON
+    // null = use default layout on frontend
+    @Column(name = "widget_layout", columnDefinition = "jsonb")
+    private String widgetLayout;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();

@@ -13,6 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.corecompass.core.service.NotificationService;
+import com.corecompass.core.dto.WidgetConfig;
+import com.corecompass.core.dto.WidgetLayoutRequest;
+import java.util.List;
 
 import java.util.List;
 import java.util.UUID;
@@ -242,6 +245,7 @@ class MilestoneController {
 class DashboardController {
 
     private final DashboardService dashboardService;
+    private final NotificationService notificationService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<DashboardResponse>> getDashboard(
@@ -255,6 +259,23 @@ class DashboardController {
             @RequestHeader("X-User-Id") UUID userId) {
         return ResponseEntity.ok(ApiResponse.ok(
                 dashboardService.getTodaySnapshot(userId), null));
+    }
+
+    /** GET /api/v1/dashboard/widgets — get user's widget layout */
+    @GetMapping("/widgets")
+    public ResponseEntity<ApiResponse<List<WidgetConfig>>> getWidgets(
+            @RequestHeader("X-User-Id") UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.getWidgetLayout(userId), null));
+    }
+
+    /** PUT /api/v1/dashboard/widgets — save user's widget layout */
+    @PutMapping("/widgets")
+    public ResponseEntity<ApiResponse<List<WidgetConfig>>> updateWidgets(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody WidgetLayoutRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                notificationService.updateWidgetLayout(userId, req), "Widget layout saved"));
     }
 }
 

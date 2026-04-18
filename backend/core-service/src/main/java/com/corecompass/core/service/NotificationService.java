@@ -3,6 +3,7 @@ package com.corecompass.core.service;
 import com.corecompass.core.dto.*;
 import com.corecompass.core.entity.*;
 import com.corecompass.core.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
+import com.corecompass.core.dto.WidgetConfig;
+import com.corecompass.core.dto.WidgetLayoutRequest;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -20,6 +26,7 @@ public class NotificationService {
 
     private final NotificationRepository    notificationRepo;
     private final UserPreferencesRepository prefsRepo;
+    private final ObjectMapper objectMapper;
 
     // ── GET /notifications ────────────────────────────────────
     public PageResponse<NotificationResponse> listNotifications(UUID userId, Pageable pageable) {
@@ -111,5 +118,54 @@ public class NotificationService {
                 .budgetAlerts(e.isBudgetAlerts())
                 .habitReminders(e.isHabitReminders())
                 .build();
+    }
+
+    // ── GET /dashboard/widgets ────────────────────────────────
+    public List<WidgetConfig> getWidgetLayout(UUID userId) {
+        UserPreferencesEntity prefs = prefsRepo.findByUserId(userId)
+                .orElseGet(() -> defaultPrefs(userId));
+
+        if (prefs.getWidgetLayout() == null || prefs.getWidgetLayout().isBlank()) {
+            return defaultWidgetLayout();
+        }
+
+        try {
+            return objectMapper.readValue(prefs.getWidgetLayout(),
+                    new TypeReference<List<WidgetConfig>>() {});
+        } catch (Exception ex) {
+            log.warn("Failed to parse widget layout for userId={}, returning defaults", userId);
+            return defaultWidgetLayout();
+        }
+    }
+
+    // ── PUT /dashboard/widgets ────────────────────────────────
+    @Transactional
+    public List<WidgetConfig> updateWidgetLayout(UUID userId, WidgetLayoutRequest req) {
+        UserPreferencesEntity prefs = prefsRepo.findByUserId(userId)
+                .orElseGet(() -> UserPreferencesEntity.builder().userId(userId).build());
+
+        try {
+            String json = objectMapper.writeValueAsString(req.getWidgets());
+            prefs.setWidgetLayout(json);
+            prefsRepo.save(prefs);
+            log.info("Widget layout updated for userId={}, widgets={}",
+                    userId, req.getWidgets().size());
+            return req.getWidgets();
+        } catch (Exception ex) {
+            log.error("Failed to save widget layout for userId={}: {}", userId, ex.getMessage());
+            throw new RuntimeException("Failed to save widget layout");
+        }
+    }
+
+    // ── Default layout ────────────────────────────────────────
+    private List<WidgetConfig> defaultWidgetLayout() {
+        return List.of(
+                WidgetConfig.builder().widgetId("GOALS_SUMMARY")    .position(0).visible(true).build(),
+                WidgetConfig.builder().widgetId("TODOS_TODAY")      .position(1).visible(true).build(),
+                WidgetConfig.builder().widgetId("HABITS_SCORE")     .position(2).visible(true).build(),
+                WidgetConfig.builder().widgetId("FITNESS_WEEKLY")   .position(3).visible(true).build(),
+                WidgetConfig.builder().widgetId("FINANCE_MONTHLY")  .position(4).visible(true).build(),
+                WidgetConfig.builder().widgetId("NOTIFICATIONS")    .position(5).visible(true).build()
+        );
     }
 }
