@@ -359,4 +359,96 @@ public class FitnessController {
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(svc.activatePlan(uid, id), "Plan activated"));
     }
+
+    // ── FOOD LIBRARY ──────────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/foods")
+    public ResponseEntity<ApiResponse<List<FoodResponse>>> listFoods(
+            @RequestHeader("X-User-Id") UUID uid,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listFoods(uid, search), null));
+    }
+
+    @GetMapping("/api/v1/fitness/foods/{id}")
+    public ResponseEntity<ApiResponse<FoodResponse>> getFood(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getFood(uid, id), null));
+    }
+
+    @PostMapping("/api/v1/fitness/foods")
+    public ResponseEntity<ApiResponse<FoodResponse>> createFood(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody FoodRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createFood(uid, req), "Food created"));
+    }
+
+    @PutMapping("/api/v1/fitness/foods/{id}")
+    public ResponseEntity<ApiResponse<FoodResponse>> updateFood(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody FoodRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateFood(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/foods/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteFood(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteFood(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    // ── DIET PLANS ────────────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/diet/plans")
+    public ResponseEntity<ApiResponse<List<DietPlanResponse>>> listDietPlans(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.listDietPlans(uid), null));
+    }
+
+    @GetMapping("/api/v1/fitness/diet/plans/active")
+    public ResponseEntity<ApiResponse<DietPlanResponse>> getActiveDietPlan(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getActiveDietPlan(uid), null));
+    }
+
+    @GetMapping("/api/v1/fitness/diet/plans/{id}")
+    public ResponseEntity<ApiResponse<DietPlanResponse>> getDietPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getDietPlan(uid, id), null));
+    }
+
+    @PostMapping("/api/v1/fitness/diet/plans")
+    public ResponseEntity<ApiResponse<DietPlanResponse>> createDietPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody DietPlanRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createDietPlan(uid, req), "Diet plan created"));
+    }
+
+    @PutMapping("/api/v1/fitness/diet/plans/{id}")
+    public ResponseEntity<ApiResponse<DietPlanResponse>> updateDietPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody DietPlanRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateDietPlan(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/diet/plans/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDietPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteDietPlan(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
+
+    @PostMapping("/api/v1/fitness/diet/plans/{id}/activate")
+    public ResponseEntity<ApiResponse<DietPlanResponse>> activateDietPlan(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.activateDietPlan(uid, id), "Diet plan activated"));
+    }
 }

@@ -36,6 +36,9 @@ public class FitnessService {
     private final ExerciseRepository           exerciseRepo;
     private final WorkoutPlanRepository        planRepo;
     private final WorkoutPlanExerciseRepository planExerciseRepo;
+    private final FoodRepository               foodRepo;
+    private final DietPlanRepository           dietPlanRepo;
+    private final DietPlanMealRepository       dietPlanMealRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -594,6 +597,142 @@ public class FitnessService {
                         HttpStatus.NOT_FOUND, "No active plan found"));
     }
 
+    // ── FOOD LIBRARY ─────────────────────────────────────────────
+
+    public List<FoodResponse> listFoods(UUID userId, String search) {
+        String s = (search != null && !search.isBlank()) ? search.trim() : null;
+        return foodRepo.findAvailable(userId, s)
+                .stream().map(this::toFoodResponse).collect(Collectors.toList());
+    }
+
+    public FoodResponse getFood(UUID userId, UUID id) {
+        return toFoodResponse(foodRepo.findByIdAndVisible(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Food not found")));
+    }
+
+    @Transactional
+    public FoodResponse createFood(UUID userId, FoodRequest req) {
+        FoodEntity e = FoodEntity.builder()
+                .name(req.getName().trim())
+                .brand(req.getBrand())
+                .caloriesPer100g(orZeroB(req.getCaloriesPer100g()))
+                .proteinPer100g(orZeroB(req.getProteinPer100g()))
+                .carbsPer100g(orZeroB(req.getCarbsPer100g()))
+                .fatPer100g(orZeroB(req.getFatPer100g()))
+                .servingSizeG(req.getServingSizeG())
+                .foodType(req.getFoodType() != null ? req.getFoodType().toUpperCase() : "SOLID")
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        log.info("Custom food created: {} userId={}", e.getName(), userId);
+        return toFoodResponse(foodRepo.save(e));
+    }
+
+    @Transactional
+    public FoodResponse updateFood(UUID userId, UUID id, FoodRequest req) {
+        FoodEntity e = foodRepo.findByIdAndCreatedByAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Food not found or not yours to edit"));
+        e.setName(req.getName().trim());
+        e.setCaloriesPer100g(orZeroB(req.getCaloriesPer100g()));
+        if (req.getBrand()        != null) e.setBrand(req.getBrand());
+        if (req.getProteinPer100g() != null) e.setProteinPer100g(req.getProteinPer100g());
+        if (req.getCarbsPer100g()   != null) e.setCarbsPer100g(req.getCarbsPer100g());
+        if (req.getFatPer100g()     != null) e.setFatPer100g(req.getFatPer100g());
+        if (req.getServingSizeG()   != null) e.setServingSizeG(req.getServingSizeG());
+        if (req.getFoodType()       != null) e.setFoodType(req.getFoodType().toUpperCase());
+        return toFoodResponse(foodRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteFood(UUID userId, UUID id) {
+        FoodEntity e = foodRepo.findByIdAndCreatedByAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Food not found or not yours to delete"));
+        e.setDeleted(true);
+        foodRepo.save(e);
+    }
+
+    // ── DIET PLANS ────────────────────────────────────────────────
+
+    public List<DietPlanResponse> listDietPlans(UUID userId) {
+        return dietPlanRepo.findByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
+                .stream().map(p -> toDietPlanResponse(p, loadDietPlanMeals(p.getId())))
+                .collect(Collectors.toList());
+    }
+
+    public DietPlanResponse getDietPlan(UUID userId, UUID planId) {
+        DietPlanEntity p = dietPlanRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Diet plan not found"));
+        return toDietPlanResponse(p, loadDietPlanMeals(planId));
+    }
+
+    public DietPlanResponse getActiveDietPlan(UUID userId) {
+        return dietPlanRepo.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(p -> toDietPlanResponse(p, loadDietPlanMeals(p.getId())))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "No active diet plan found"));
+    }
+
+    @Transactional
+    public DietPlanResponse createDietPlan(UUID userId, DietPlanRequest req) {
+        DietPlanEntity plan = DietPlanEntity.builder()
+                .userId(userId)
+                .name(req.getName().trim())
+                .description(req.getDescription())
+                .goal(req.getGoal() != null ? req.getGoal().toUpperCase() : "MAINTENANCE")
+                .dailyCalorieTarget(req.getDailyCalorieTarget())
+                .dailyProteinG(req.getDailyProteinG())
+                .dailyCarbsG(req.getDailyCarbsG())
+                .dailyFatG(req.getDailyFatG())
+                .build();
+        plan = dietPlanRepo.save(plan);
+        List<DietPlanMealResponse> meals = persistDietPlanMeals(plan.getId(), req.getMeals());
+        log.info("Diet plan created: {} userId={}", plan.getName(), userId);
+        return toDietPlanResponse(plan, meals);
+    }
+
+    @Transactional
+    public DietPlanResponse updateDietPlan(UUID userId, UUID planId, DietPlanRequest req) {
+        DietPlanEntity plan = dietPlanRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Diet plan not found"));
+        if (req.getName()               != null) plan.setName(req.getName().trim());
+        if (req.getDescription()        != null) plan.setDescription(req.getDescription());
+        if (req.getGoal()               != null) plan.setGoal(req.getGoal().toUpperCase());
+        if (req.getDailyCalorieTarget()  != null) plan.setDailyCalorieTarget(req.getDailyCalorieTarget());
+        if (req.getDailyProteinG()       != null) plan.setDailyProteinG(req.getDailyProteinG());
+        if (req.getDailyCarbsG()         != null) plan.setDailyCarbsG(req.getDailyCarbsG());
+        if (req.getDailyFatG()           != null) plan.setDailyFatG(req.getDailyFatG());
+
+        List<DietPlanMealResponse> meals;
+        if (req.getMeals() != null) {
+            dietPlanMealRepo.deleteByPlanId(planId);
+            meals = persistDietPlanMeals(planId, req.getMeals());
+        } else {
+            meals = loadDietPlanMeals(planId);
+        }
+        return toDietPlanResponse(dietPlanRepo.save(plan), meals);
+    }
+
+    @Transactional
+    public void deleteDietPlan(UUID userId, UUID planId) {
+        DietPlanEntity plan = dietPlanRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Diet plan not found"));
+        plan.setDeleted(true);
+        plan.setActive(false);
+        dietPlanRepo.save(plan);
+    }
+
+    @Transactional
+    public DietPlanResponse activateDietPlan(UUID userId, UUID planId) {
+        DietPlanEntity plan = dietPlanRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Diet plan not found"));
+        dietPlanRepo.deactivateAllForUser(userId);
+        plan.setActive(true);
+        log.info("Diet plan activated: {} userId={}", plan.getName(), userId);
+        return toDietPlanResponse(dietPlanRepo.save(plan), loadDietPlanMeals(planId));
+    }
+
     // ── EXERCISE LIBRARY ────────────────────────────────────────
 
     public List<ExerciseResponse> listExercises(UUID userId,
@@ -810,6 +949,81 @@ public class FitnessService {
                 .createdAt(e.getCreatedAt())
                 .updatedAt(e.getUpdatedAt())
                 .build();
+    }
+
+    // ── Diet plan private helpers ─────────────────────────────
+
+    private List<DietPlanMealResponse> persistDietPlanMeals(
+            UUID planId, List<DietPlanMealRequest> requests) {
+        if (requests == null || requests.isEmpty()) return Collections.emptyList();
+        List<DietPlanMealEntity> entities = requests.stream().map(r -> {
+            // Auto-calculate macros if foodId provided and food exists
+            BigDecimal qty = r.getQuantityG() != null ? r.getQuantityG() : BigDecimal.valueOf(100);
+            BigDecimal calories = null, protein = null, carbs = null, fat = null;
+            if (r.getFoodId() != null) {
+                foodRepo.findById(r.getFoodId()).ifPresent(food -> {});
+                // calculated inline below
+            }
+            FoodEntity food = r.getFoodId() != null
+                    ? foodRepo.findById(r.getFoodId()).orElse(null) : null;
+            if (food != null) {
+                BigDecimal factor = qty.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+                calories = food.getCaloriesPer100g().multiply(factor).setScale(2, RoundingMode.HALF_UP);
+                protein  = food.getProteinPer100g().multiply(factor).setScale(2, RoundingMode.HALF_UP);
+                carbs    = food.getCarbsPer100g().multiply(factor).setScale(2, RoundingMode.HALF_UP);
+                fat      = food.getFatPer100g().multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            }
+            return DietPlanMealEntity.builder()
+                    .planId(planId)
+                    .dayNumber(r.getDayNumber())
+                    .mealType(r.getMealType().toUpperCase())
+                    .foodId(r.getFoodId())
+                    .foodName(r.getFoodName().trim())
+                    .quantityG(qty)
+                    .calories(calories).proteinG(protein).carbsG(carbs).fatG(fat)
+                    .sortOrder(r.getSortOrder() != null ? r.getSortOrder() : 0)
+                    .build();
+        }).collect(Collectors.toList());
+        return dietPlanMealRepo.saveAll(entities).stream()
+                .map(this::toDietPlanMealResponse).collect(Collectors.toList());
+    }
+
+    private List<DietPlanMealResponse> loadDietPlanMeals(UUID planId) {
+        return dietPlanMealRepo.findByPlanIdOrderByDayNumberAscMealTypeAscSortOrderAsc(planId)
+                .stream().map(this::toDietPlanMealResponse).collect(Collectors.toList());
+    }
+
+    private DietPlanMealResponse toDietPlanMealResponse(DietPlanMealEntity e) {
+        return DietPlanMealResponse.builder()
+                .id(e.getId()).dayNumber(e.getDayNumber()).mealType(e.getMealType())
+                .foodId(e.getFoodId()).foodName(e.getFoodName()).quantityG(e.getQuantityG())
+                .calories(e.getCalories()).proteinG(e.getProteinG())
+                .carbsG(e.getCarbsG()).fatG(e.getFatG()).sortOrder(e.getSortOrder())
+                .build();
+    }
+
+    private DietPlanResponse toDietPlanResponse(DietPlanEntity e, List<DietPlanMealResponse> meals) {
+        return DietPlanResponse.builder()
+                .id(e.getId()).name(e.getName()).description(e.getDescription())
+                .goal(e.getGoal()).dailyCalorieTarget(e.getDailyCalorieTarget())
+                .dailyProteinG(e.getDailyProteinG()).dailyCarbsG(e.getDailyCarbsG())
+                .dailyFatG(e.getDailyFatG()).isActive(e.isActive())
+                .meals(meals).createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
+                .build();
+    }
+
+    private FoodResponse toFoodResponse(FoodEntity e) {
+        return FoodResponse.builder()
+                .id(e.getId()).name(e.getName()).brand(e.getBrand())
+                .caloriesPer100g(e.getCaloriesPer100g()).proteinPer100g(e.getProteinPer100g())
+                .carbsPer100g(e.getCarbsPer100g()).fatPer100g(e.getFatPer100g())
+                .servingSizeG(e.getServingSizeG()).foodType(e.getFoodType())
+                .isSystem(e.isSystem()).createdAt(e.getCreatedAt())
+                .build();
+    }
+
+    private BigDecimal orZeroB(BigDecimal val) {
+        return val != null ? val : BigDecimal.ZERO;
     }
 
 }
