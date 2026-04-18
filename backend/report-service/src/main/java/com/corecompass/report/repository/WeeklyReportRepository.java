@@ -8,7 +8,12 @@ import java.util.*;
 
 @Repository
 public interface WeeklyReportRepository extends JpaRepository<WeeklyReportEntity, UUID> {
+
     Page<WeeklyReportEntity> findByUserIdOrderByWeekStartDesc(UUID userId, Pageable p);
+
     Optional<WeeklyReportEntity> findByUserIdAndWeekStart(UUID userId, LocalDate weekStart);
+
     boolean existsByUserIdAndWeekStart(UUID userId, LocalDate weekStart);
+
+    List<WeeklyReportEntity> findByUserIdAndWeekStartBetweenOrderByWeekStartAsc(UUID userId, LocalDate from, LocalDate to);
 }

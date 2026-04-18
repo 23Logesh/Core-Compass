@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import com.corecompass.report.dto.MonthlyReportDTO;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -27,6 +29,18 @@ public class ReportController {
             @RequestParam(defaultValue = "12") int size) {
         return ResponseEntity.ok(
             reportService.listReports(userId, PageRequest.of(page, size)));
+    }
+
+    /**
+     * GET /api/v1/reports/monthly
+     * Returns monthly aggregated summaries (derived from weekly reports, no new entity).
+     */
+    @GetMapping("/monthly")
+    public ResponseEntity<List<MonthlyReportDTO>> listMonthly(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "12") int size) {
+        return ResponseEntity.ok(reportService.listMonthlyReports(userId, page, size));
     }
 
     /**

@@ -15,6 +15,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
+import com.corecompass.report.dto.MonthlyReportDTO;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -77,6 +83,35 @@ public class ReportService {
         scheduler.generateForAllUsers();
     }
 
+    /**
+     * Returns monthly aggregated summaries derived from existing weekly reports.
+     * No new entity — groups WeeklyReportEntity rows by YearMonth.
+     */
+    public List<MonthlyReportDTO> listMonthlyReports(UUID userId, int page, int size) {
+        // Fetch all weekly reports for this user (latest first)
+        List<WeeklyReportEntity> allWeeks =
+                reportRepo.findByUserIdOrderByWeekStartDesc(userId, Pageable.unpaged())
+                        .getContent();
+
+        if (allWeeks.isEmpty()) return List.of();
+
+        // Group by YearMonth of weekStart
+        Map<YearMonth, List<WeeklyReportEntity>> grouped = allWeeks.stream()
+                .collect(Collectors.groupingBy(w -> YearMonth.from(w.getWeekStart())));
+
+        // Sort months descending, apply manual pagination
+        List<MonthlyReportDTO> result = grouped.entrySet().stream()
+                .sorted(Map.Entry.<YearMonth, List<WeeklyReportEntity>>comparingByKey().reversed())
+                .map(e -> toMonthlyDTO(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+
+        // Manual pagination
+        int from = page * size;
+        if (from >= result.size()) return List.of();
+        int to = Math.min(from + size, result.size());
+        return result.subList(from, to);
+    }
+
     // ── Mappers ───────────────────────────────────────────────────
 
     private WeeklyReportDTO toFullDTO(WeeklyReportEntity e) {
@@ -107,5 +142,36 @@ public class ReportService {
             .workoutsCount(e.getWorkoutsCount())
             .createdAt(e.getCreatedAt())
             .build();
+    }
+
+    private MonthlyReportDTO toMonthlyDTO(YearMonth month, List<WeeklyReportEntity> weeks) {
+        int count = weeks.size();
+
+        double avgGoalProgress   = weeks.stream().mapToDouble(WeeklyReportEntity::getAvgGoalProgress).average().orElse(0);
+        int    totalWorkouts     = weeks.stream().mapToInt(WeeklyReportEntity::getWorkoutsCount).sum();
+        double totalCalories     = weeks.stream().mapToDouble(WeeklyReportEntity::getCaloriesBurned).sum();
+        double avgSleep          = weeks.stream().mapToDouble(WeeklyReportEntity::getAvgSleepHours).average().orElse(0);
+        double totalNetSavings   = weeks.stream().mapToDouble(WeeklyReportEntity::getNetSavings).sum();
+        int    avgHabitScore     = (int) weeks.stream().mapToInt(WeeklyReportEntity::getHabitScore).average().orElse(0);
+
+        // Collect all insights, deduplicate, keep top 5
+        List<String> topInsights = weeks.stream()
+                .filter(w -> w.getInsights() != null)
+                .flatMap(w -> w.getInsights().stream())
+                .distinct()
+                .limit(5)
+                .collect(Collectors.toList());
+
+        return MonthlyReportDTO.builder()
+                .month(month.toString())
+                .weeksCovered(count)
+                .avgGoalProgress(Math.round(avgGoalProgress * 10.0) / 10.0)
+                .totalWorkouts(totalWorkouts)
+                .totalCaloriesBurned(Math.round(totalCalories * 10.0) / 10.0)
+                .avgSleepHours(Math.round(avgSleep * 10.0) / 10.0)
+                .totalNetSavings(Math.round(totalNetSavings * 100.0) / 100.0)
+                .avgHabitScore(avgHabitScore)
+                .topInsights(topInsights)
+                .build();
     }
 }
