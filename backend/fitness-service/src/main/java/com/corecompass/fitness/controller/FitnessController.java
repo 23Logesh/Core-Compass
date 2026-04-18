@@ -264,4 +264,47 @@ public class FitnessController {
             @RequestParam String weekStart) {
         return ResponseEntity.ok(svc.getWeeklySummaryForFeign(userId, weekStart));
     }
+
+    // ── EXERCISE LIBRARY ─────────────────────────────────────────────────
+
+    @GetMapping("/api/v1/fitness/exercises")
+    public ResponseEntity<ApiResponse<List<ExerciseResponse>>> listExercises(
+            @RequestHeader("X-User-Id") UUID uid,
+            @RequestParam(required = false) String muscleGroup,
+            @RequestParam(required = false) String equipment,
+            @RequestParam(required = false) String difficulty) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                svc.listExercises(uid, muscleGroup, equipment, difficulty), null));
+    }
+
+    @GetMapping("/api/v1/fitness/exercises/{id}")
+    public ResponseEntity<ApiResponse<ExerciseResponse>> getExercise(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getExercise(uid, id), null));
+    }
+
+    @PostMapping("/api/v1/fitness/exercises")
+    public ResponseEntity<ApiResponse<ExerciseResponse>> createExercise(
+            @RequestHeader("X-User-Id") UUID uid,
+            @Valid @RequestBody ExerciseRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.createExercise(uid, req), "Exercise created"));
+    }
+
+    @PutMapping("/api/v1/fitness/exercises/{id}")
+    public ResponseEntity<ApiResponse<ExerciseResponse>> updateExercise(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id,
+            @Valid @RequestBody ExerciseRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.updateExercise(uid, id, req), "Updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/exercises/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteExercise(
+            @RequestHeader("X-User-Id") UUID uid,
+            @PathVariable UUID id) {
+        svc.deleteExercise(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted"));
+    }
 }

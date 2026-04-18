@@ -33,6 +33,7 @@ public class FitnessService {
     private final HydrationRepository  hydrationRepo;
     private final WorkoutExerciseRepository workoutExerciseRepo;
     private final FitnessTargetRepository targetRepo;
+    private final ExerciseRepository      exerciseRepo;
 
     // ── CARDIO ──────────────────────────────────────────────────
     @Transactional
@@ -514,6 +515,66 @@ public class FitnessService {
         }).sorted(Comparator.comparing(WorkoutPRResponse::getExerciseName)).collect(Collectors.toList());
     }
 
+    // ── EXERCISE LIBRARY ────────────────────────────────────────
+
+    public List<ExerciseResponse> listExercises(UUID userId,
+                                                String muscleGroup,
+                                                String equipment,
+                                                String difficulty) {
+        String mg = muscleGroup != null ? muscleGroup.toUpperCase() : null;
+        String eq = equipment   != null ? equipment.toUpperCase()   : null;
+        String df = difficulty  != null ? difficulty.toUpperCase()  : null;
+        return exerciseRepo.findAvailable(userId, mg, eq, df)
+                .stream().map(this::toExerciseResponse).collect(Collectors.toList());
+    }
+
+    public ExerciseResponse getExercise(UUID userId, UUID id) {
+        return toExerciseResponse(
+                exerciseRepo.findByIdAndVisible(id, userId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "Exercise not found"))
+        );
+    }
+
+    @Transactional
+    public ExerciseResponse createExercise(UUID userId, ExerciseRequest req) {
+        ExerciseEntity e = ExerciseEntity.builder()
+                .name(req.getName().trim())
+                .muscleGroup(req.getMuscleGroup().toUpperCase())
+                .equipment(req.getEquipment()  != null ? req.getEquipment().toUpperCase()  : "NONE")
+                .difficulty(req.getDifficulty() != null ? req.getDifficulty().toUpperCase() : "BEGINNER")
+                .instructions(req.getInstructions())
+                .videoUrl(req.getVideoUrl())
+                .isSystem(false)
+                .createdBy(userId)
+                .build();
+        log.info("Custom exercise created: {} userId={}", e.getName(), userId);
+        return toExerciseResponse(exerciseRepo.save(e));
+    }
+
+    @Transactional
+    public ExerciseResponse updateExercise(UUID userId, UUID id, ExerciseRequest req) {
+        ExerciseEntity e = exerciseRepo.findByIdAndCreatedByAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Exercise not found or not yours to edit"));
+        e.setName(req.getName().trim());
+        e.setMuscleGroup(req.getMuscleGroup().toUpperCase());
+        if (req.getEquipment()    != null) e.setEquipment(req.getEquipment().toUpperCase());
+        if (req.getDifficulty()   != null) e.setDifficulty(req.getDifficulty().toUpperCase());
+        if (req.getInstructions() != null) e.setInstructions(req.getInstructions());
+        if (req.getVideoUrl()     != null) e.setVideoUrl(req.getVideoUrl());
+        return toExerciseResponse(exerciseRepo.save(e));
+    }
+
+    @Transactional
+    public void deleteExercise(UUID userId, UUID id) {
+        ExerciseEntity e = exerciseRepo.findByIdAndCreatedByAndIsDeletedFalse(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Exercise not found or not yours to delete"));
+        e.setDeleted(true);
+        exerciseRepo.save(e);
+    }
+
     // ── private helpers (ADD these, they're NEW) ─────────────────
     private List<ExerciseSetResponse> persistExerciseSets(UUID sessionId, List<ExerciseSetRequest> requests, WorkoutSessionEntity session) {
         if (requests == null || requests.isEmpty()) return Collections.emptyList();
@@ -602,5 +663,18 @@ public class FitnessService {
     private BodyMetricResponse toMetricResponse(BodyMetricEntity e) {
         return BodyMetricResponse.builder().id(e.getId()).metricType(e.getMetricType())
                 .value(e.getValue()).unit(e.getUnit()).loggedDate(e.getLoggedDate()).createdAt(e.getCreatedAt()).build();
+    }
+    private ExerciseResponse toExerciseResponse(ExerciseEntity e) {
+        return ExerciseResponse.builder()
+                .id(e.getId())
+                .name(e.getName())
+                .muscleGroup(e.getMuscleGroup())
+                .equipment(e.getEquipment())
+                .difficulty(e.getDifficulty())
+                .instructions(e.getInstructions())
+                .videoUrl(e.getVideoUrl())
+                .isSystem(e.isSystem())
+                .createdAt(e.getCreatedAt())
+                .build();
     }
 }
