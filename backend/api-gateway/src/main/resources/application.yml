@@ -66,7 +66,7 @@ spring:
         - id: core-service
           uri: lb://core-service
           predicates:
-            - Path=/api/v1/goals/**,/api/v1/todos/**,/api/v1/users/**,/api/v1/dashboard/**,/api/v1/activity-types/**,/api/v1/notifications/**,/api/v1/achievements/**
+            - Path=/api/v1/goals/**,/api/v1/todos/**,/api/v1/dashboard/**,/api/v1/activity-types/**,/api/v1/notifications/**,/api/v1/achievements/**
           filters:
             - name: CircuitBreaker
               args:
@@ -148,7 +148,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://${EUREKA_USERNAME:admin}:${EUREKA_PASSWORD:corecompass2026}@${EUREKA_HOST:localhost}:8761/eureka/}
+      defaultZone: ${EUREKA_URL:http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@${EUREKA_HOST:localhost}:8761/eureka/}
     registry-fetch-interval-seconds: 10
     instance-info-replication-interval-seconds: 10
   instance:
@@ -162,7 +162,7 @@ eureka:
 # JWT
 # ─────────────────────────────────────────────────────────────
 jwt:
-  secret: ${JWT_SECRET:CoreCompassSuperSecretKeyForJWTTokenGenerationMinimum256BitsLong}
+  secret: ${JWT_SECRET}
 
 # ─────────────────────────────────────────────────────────────
 # Resilience4j — Circuit Breaker instances

@@ -400,6 +400,14 @@ public class FitnessService {
         return toMoodResponse(moodRepo.save(e));
     }
 
+    // ── DELETE /fitness/mood/{id} ─────────────────────────────────
+    @Transactional
+    public void deleteMoodLog(UUID userId, UUID id) {
+        MoodLogEntity e = moodRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mood log not found"));
+        moodRepo.delete(e);
+    }
+
     // ── GET /fitness/metrics/stats ────────────────────────────────
     public BodyMetricStatsResponse getMetricStats(UUID userId) {
         Pageable one = PageRequest.of(0, 1);
@@ -502,6 +510,12 @@ public class FitnessService {
                 .dailyCalorieBurnTarget(saved.getDailyCalorieBurnTarget()).updatedAt(saved.getUpdatedAt()).build();
     }
 
+    // ── DELETE /fitness/targets ───────────────────────────────────
+    @Transactional
+    public void deleteTargets(UUID userId) {
+        targetRepo.findByUserId(userId).ifPresent(targetRepo::delete);
+    }
+
     // ── GET /fitness/workouts/prs ─────────────────────────────────
     public List<WorkoutPRResponse> getWorkoutPRs(UUID userId) {
         List<WorkoutExerciseEntity> all = workoutExerciseRepo.findAllByUserId(userId);
@@ -595,6 +609,23 @@ public class FitnessService {
         plan.setActive(true);
         log.info("Workout plan activated: {} userId={}", plan.getName(), userId);
         return toPlanResponse(planRepo.save(plan), loadPlanExercises(planId));
+    }
+
+    // ── POST /fitness/plans/{id}/clone ────────────────────────────
+    @Transactional
+    public WorkoutPlanResponse cloneWorkoutPlan(UUID userId, UUID planId) {
+        WorkoutPlanEntity original = planRepo.findByIdAndUserIdAndIsDeletedFalse(planId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
+        WorkoutPlanEntity clone = WorkoutPlanEntity.builder()
+                .userId(userId)
+                .name(original.getName() + " (Copy)")
+                .description(original.getDescription())
+                .difficulty(original.getDifficulty())
+                .daysPerWeek(original.getDaysPerWeek())
+                .isActive(false)
+                .build();
+        WorkoutPlanEntity saved = planRepo.save(clone);
+        return toPlanResponse(saved, java.util.Collections.emptyList());
     }
 
     public WorkoutPlanResponse getActivePlan(UUID userId) {

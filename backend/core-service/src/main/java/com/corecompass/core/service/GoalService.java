@@ -33,6 +33,7 @@ public class GoalService {
     private final GoogleCalendarService calendarService;
     private final ActivityRepository     activityRepository;
     private final ActivityTypeRepository activityTypeRepository;
+    private final AchievementService     achievementService;
 
     // ─────────────────────────────────────────────────────────
     // GOAL TYPES (Type Registry)
@@ -262,6 +263,11 @@ public class GoalService {
         // Recalculate goal progress atomically
         recalculateGoalProgress(goalId);
 
+        // 🏆 Check achievements after todo completion
+        if (todo.isCompleted()) {
+            achievementService.checkTodoMachine(userId);
+        }
+
         log.info("Todo toggled: id={} completed={}", todoId, todo.isCompleted());
         return toTodoResponse(todo);
     }
@@ -404,6 +410,8 @@ public class GoalService {
             goal.setProgressPct(progress);
             if (progress.compareTo(BigDecimal.valueOf(100)) == 0) {
                 goal.setStatus("COMPLETED");
+                // 🏆 Check achievements after goal completion
+                achievementService.checkGoalCompleted(goal.getUserId());
             }
             goalRepository.save(goal);
         });

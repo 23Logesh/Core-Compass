@@ -265,6 +265,87 @@ public class FinanceService {
         return getBudgetsForMonth(userId, month);
     }
 
+    public List<BudgetAlertResponse> getBudgetAlerts(UUID userId) {
+        String currentMonth = java.time.YearMonth.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+        List<BudgetStatusResponse> all = getBudgetsForMonth(userId, currentMonth);
+        return all.stream()
+                .filter(b -> b.getPercentageUsed() >= 80.0)
+                .map(b -> BudgetAlertResponse.builder()
+                        .categoryId(b.getCategoryId())
+                        .categoryName(b.getCategoryName())
+                        .categoryIcon(b.getCategoryIcon())
+                        .month(b.getMonthYear())
+                        .budgetAmount(b.getBudgetAmount())
+                        .spentAmount(b.getSpentAmount())
+                        .percentageUsed(b.getPercentageUsed())
+                        .exceeded(b.isExceeded())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<BudgetHistoryResponse> getBudgetHistory(UUID userId) {
+        LocalDate sixMonthsAgo = LocalDate.now().minusMonths(6).withDayOfMonth(1);
+
+        // Get actual monthly spending from expense repo (already has sumByMonth query)
+        List<Object[]> spendingRows = expenseRepo.sumByMonth(userId, sixMonthsAgo);
+        java.util.Map<String, BigDecimal> spentByMonth = spendingRows.stream()
+                .collect(Collectors.toMap(
+                        r -> (String) r[0],
+                        r -> ((BigDecimal) r[1])
+                ));
+
+        // Get all budgets set across last 6 months, group by budgetMonth
+        java.util.Map<String, BigDecimal> budgetedByMonth = new java.util.HashMap<>();
+        for (int i = 0; i <= 6; i++) {
+            String month = java.time.YearMonth.now().minusMonths(i)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+            BigDecimal total = budgetRepo.findByUserIdAndBudgetMonth(userId, month)
+                    .stream()
+                    .map(BudgetEntity::getAmountLimit)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (total.compareTo(BigDecimal.ZERO) > 0) {
+                budgetedByMonth.put(month, total);
+            }
+        }
+
+        // Merge and build response — only months that have budget data
+        return budgetedByMonth.entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> {
+                    String month = entry.getKey();
+                    BigDecimal budgeted = entry.getValue();
+                    BigDecimal spent = spentByMonth.getOrDefault(month, BigDecimal.ZERO);
+                    double pct = budgeted.compareTo(BigDecimal.ZERO) == 0 ? 0
+                            : Math.min(200, spent.divide(budgeted, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100)).doubleValue());
+                    return BudgetHistoryResponse.builder()
+                            .month(month)
+                            .totalBudgeted(budgeted)
+                            .totalSpent(spent)
+                            .surplus(budgeted.subtract(spent))
+                            .adherencePct(pct)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteDebt(UUID userId, UUID id) {
+        DebtEntity debt = debtRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new RuntimeException("Debt not found"));
+        debt.setDeleted(true);
+        debtRepo.save(debt);
+    }
+
+    @Transactional
+    public void deleteInvestment(UUID userId, UUID id) {
+        InvestmentEntity inv = investmentRepo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new RuntimeException("Investment not found"));
+        inv.setDeleted(true);
+        investmentRepo.save(inv);
+    }
+
     // ─── HEALTH SCORE (0-100, 4 components per API doc) ───────
     public HealthScoreResponse getHealthScore(UUID userId) {
         String month = YearMonth.now().toString();
@@ -367,7 +448,7 @@ public class FinanceService {
         BigDecimal total = debts.stream().map(DebtEntity::getCurrentBalance).reduce(BigDecimal.ZERO, BigDecimal::add);
         return DebtPayoffResponse.builder().avalancheOrder(avalanche).snowballOrder(snowball)
             .totalDebt(total).recommendation(avalanche.isEmpty() ? "Debt-free! Great job!" :
-                "Avalanche saves most interest. Pay \"" + avalanche.get(0) + "\" first.").build();
+                "Avalanche saves most interest. Pay \"" + avalanche.getFirst() + "\" first.").build();
     }
 
     // ─── INVESTMENTS ──────────────────────────────────────────

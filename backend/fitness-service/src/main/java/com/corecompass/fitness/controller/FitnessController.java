@@ -222,6 +222,13 @@ public class FitnessController {
         return ResponseEntity.ok(ApiResponse.ok(svc.updateMood(uid, id, req), "Mood updated"));
     }
 
+    @DeleteMapping("/api/v1/fitness/mood/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteMoodLog(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteMoodLog(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Mood log deleted"));
+    }
+
     // ── STREAKS ─────────────────────────────────────────────
     @GetMapping("/api/v1/fitness/streaks")
     public ResponseEntity<ApiResponse<List<StreakResponse>>> getStreaks(
@@ -255,6 +262,13 @@ public class FitnessController {
             @RequestHeader("X-User-Id") UUID uid,
             @Valid @RequestBody FitnessTargetRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(svc.upsertTargets(uid, req), "Targets updated"));
+    }
+
+    @DeleteMapping("/api/v1/fitness/targets")
+    public ResponseEntity<ApiResponse<Void>> deleteTargets(
+            @RequestHeader("X-User-Id") UUID uid) {
+        svc.deleteTargets(uid);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Fitness targets cleared"));
     }
 
     // ── INTERNAL FEIGN (called by Report + Core services) ───
@@ -358,6 +372,13 @@ public class FitnessController {
             @RequestHeader("X-User-Id") UUID uid,
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(svc.activatePlan(uid, id), "Plan activated"));
+    }
+
+    @PostMapping("/api/v1/fitness/plans/{id}/clone")
+    public ResponseEntity<ApiResponse<WorkoutPlanResponse>> clonePlan(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(svc.cloneWorkoutPlan(uid, id), "Plan cloned"));
     }
 
     // ── FOOD LIBRARY ──────────────────────────────────────────────────────

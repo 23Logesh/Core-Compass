@@ -1,5 +1,5 @@
 -- =============================================================
--- CoreCompass — Core Schema Migration V9
+-- CoreCompass — Core Schema Migration V10
 -- Adds widget_layout column to user_preferences
 -- Stores user-configurable dashboard widget order + visibility
 -- =============================================================

@@ -187,6 +187,18 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(svc.setBudgets(uid, reqs), "Budgets updated"));
     }
 
+    @GetMapping("/api/v1/finance/budgets/alerts")
+    public ResponseEntity<ApiResponse<List<BudgetAlertResponse>>> getBudgetAlerts(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getBudgetAlerts(uid), null));
+    }
+
+    @GetMapping("/api/v1/finance/budgets/history")
+    public ResponseEntity<ApiResponse<List<BudgetHistoryResponse>>> getBudgetHistory(
+            @RequestHeader("X-User-Id") UUID uid) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.getBudgetHistory(uid), null));
+    }
+
     // ── HEALTH SCORE ─────────────────────────────────────────
     @GetMapping("/api/v1/finance/health-score")
     public ResponseEntity<ApiResponse<HealthScoreResponse>> getHealthScore(@RequestHeader("X-User-Id") UUID uid) {
@@ -258,6 +270,13 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(svc.getDebtPayoffStrategy(uid), null));
     }
 
+    @DeleteMapping("/api/v1/finance/debts/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDebt(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteDebt(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Debt deleted"));
+    }
+
     // ── INVESTMENTS ──────────────────────────────────────────
     @GetMapping("/api/v1/finance/investment-types")
     public ResponseEntity<ApiResponse<List<InvestmentTypeDTO>>> listInvestmentTypes(@RequestHeader("X-User-Id") UUID uid) {
@@ -279,6 +298,13 @@ public class FinanceController {
     public ResponseEntity<ApiResponse<InvestmentResponse>> updateInvestmentValue(
             @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id, @RequestParam BigDecimal value) {
         return ResponseEntity.ok(ApiResponse.ok(svc.updateValue(uid, id, value), "Value updated"));
+    }
+
+    @DeleteMapping("/api/v1/finance/investments/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteInvestment(
+            @RequestHeader("X-User-Id") UUID uid, @PathVariable UUID id) {
+        svc.deleteInvestment(uid, id);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Investment deleted"));
     }
 
     @GetMapping("/api/v1/finance/investments/summary")
