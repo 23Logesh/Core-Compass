@@ -1,2 +1,106 @@
+# =============================================================
+# CoreCompass Backend — .gitignore
+# Place this file at: backend/.gitignore
+# =============================================================
+
+
+# ─── SECRETS — NEVER COMMIT ──────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+
+
+# ─── MAVEN BUILD OUTPUT ──────────────────────────────────────
 target/
-*/target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+
+# ─── INTELLIJ IDEA ───────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# Keep the run configuration if you want shared launch configs
+# (comment the .idea/ line above and uncomment below instead)
+# !.idea/runConfigurations/
+
+
+# ─── ECLIPSE ─────────────────────────────────────────────────
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+
+
+# ─── VS CODE ─────────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+
+# ─── COMPILED / GENERATED ────────────────────────────────────
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+
+# ─── LOGS ────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+spring.log
+
+
+# ─── OS FILES ────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+# ─── DOCKER ──────────────────────────────────────────────────
+# Keep docker-compose.yml (it's the deployment config)
+# but ignore override files with real credentials
+docker-compose.override.yml
+docker-compose.local.yml
+
+
+# ─── SPRING BOOT DEVTOOLS ────────────────────────────────────
+.reloadtrigger
+
+
+# ─── MAPSTRUCT / ANNOTATION PROCESSORS ───────────────────────
+generated-sources/
+
+
+# ─── TEST REPORTS ────────────────────────────────────────────
+**/surefire-reports/
+**/failsafe-reports/
+**/test-results/
+
+
+# ─── TEMP / MISC ─────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
